@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"strconv"
 )
@@ -39,14 +38,14 @@ type Socks5Server struct {
 func (s *Socks5Server) listen() {
 	l, err := net.Listen("tcp4", s.listenAddr)
 	if err != nil {
-		fmt.Errorf("listen on %s failed", s.listenAddr)
+		logger.Errorf("listen on %s failed", s.listenAddr)
 		return
 	}
 
 	for {
 		conn, err := l.Accept()
 		if err != nil {
-			fmt.Errorf("accept new connection failed")
+			logger.Errorf("accept new connection failed")
 			panic(err)
 		}
 		go handleConnection(conn)
@@ -57,16 +56,16 @@ func readHeader(conn net.Conn) error {
 	var bufConn *bufio.Reader = bufio.NewReader(conn)
 	header := []byte{0, 0, 0}
 	if _, err := bufConn.Read(header); err != nil {
-		log.Println("error reading socks version")
+		logger.Errorln("error reading socks version")
 		return err
 	}
 
 	if header[0] != socks5Version {
-		log.Println("unsupported version")
+		logger.Errorln("unsupported version when reading socks5 header")
 		return fmt.Errorf("version not supported")
 	}
 
-	log.Printf("num of method is %d, method is %d", header[1], header[2])
+	logger.Debugf("num of method is %d, method is %d", header[1], header[2])
 
 	return nil
 }
@@ -74,7 +73,7 @@ func readHeader(conn net.Conn) error {
 func sendNoAuthReply(writer io.Writer) error {
 	_, err := writer.Write([]byte{socks5Version, 0})
 	if err != nil {
-		log.Println("send no auth reply error")
+		logger.Errorln("send no auth reply error")
 	}
 	return err
 }
@@ -87,7 +86,7 @@ func sendRequestReply(writer io.Writer, resp uint8, addr net.IP, port uint16) er
 	copy(data[4:], addr)
 	binary.BigEndian.PutUint16(data[4+len(addr):], port)
 	if _, err := writer.Write(data); err != nil {
-		log.Println("send request reply error")
+		logger.Errorln("send request reply error")
 		return err
 	}
 	return nil
@@ -95,23 +94,27 @@ func sendRequestReply(writer io.Writer, resp uint8, addr net.IP, port uint16) er
 
 func pipe(reader io.Reader, writer io.Writer, name string, c chan string) {
 	_, err := io.Copy(writer, reader)
-	log.Printf("pipe %s done, with error: %s", name, err.Error())
+	logger.Debugf("pipe %s done", name)
+	if err != nil {
+		logger.Errorf("pipe %s error: %v", name, err)
+	}
+
 	c <- name
 }
 
 func handleRequest(conn net.Conn) error {
 	buf := []byte{0, 0, 0, 0}
 	if num, err := io.ReadAtLeast(conn, buf, 4); err != nil {
-		log.Fatalf("error when read request, only got %d bytes", num)
+		logger.Fatalf("error when read request, only got %d bytes", num)
 		return err
 	}
 
 	ver := buf[0]
 	command := buf[1]
 	addrType := buf[3]
-	log.Printf("ver:%x cmd:%x, addrType: %x", ver, command, addrType)
+	logger.Infof("ver:%x cmd:%x, addrType: %x", ver, command, addrType)
 	if ver != socks5Version {
-		log.Println("request version not supported")
+		logger.Errorln("request version not supported")
 		return fmt.Errorf("unsupported version")
 	}
 
@@ -123,43 +126,42 @@ func handleRequest(conn net.Conn) error {
 	case fqdnAddress:
 		addrLen := []byte{0}
 		if _, err := conn.Read(addrLen); err != nil {
-			log.Println("read fqdn length error")
+			logger.Errorln("read fqdn length error")
 			return err
 		}
 		fqdn := make([]byte, uint(addrLen[0]))
 		if _, err := conn.Read(fqdn); err != nil {
-			log.Println("read fqdn error")
+			logger.Errorln("read fqdn error")
 			return err
 		}
 		domainName := string(fqdn)
 		if addr, err := net.ResolveIPAddr("ip", domainName); err != nil {
-			log.Fatalf("resolving domain: %s error", domainName)
+			logger.Fatalf("resolving domain: %s error", domainName)
 			return err
 		} else {
 			ip = addr.IP
 		}
-		log.Printf("request domain: %s, ip: %s", domainName, ip)
+		logger.Debugf("request domain: %s, ip: %s", domainName, ip)
 	case ipv4Address:
 		fallthrough
 	case ipv6Address:
 		ipLen = 16
 		ip = make([]byte, ipLen)
 		if _, err := conn.Read(ip); err != nil {
-			log.Println("read ip address error")
+			logger.Errorln("read ip address error")
 			return err
 		}
 	default:
-		log.Fatalf("unsupported request address type: %x", addrType)
+		logger.Fatalf("unsupported request address type: %x", addrType)
 		return fmt.Errorf("unsupported address type")
 	}
 
 	portBuf := []byte{0, 0}
 	if _, err := conn.Read(portBuf); err != nil {
-		log.Println("read request port error")
+		logger.Errorln("read request port error")
 		return err
 	}
 	var port uint16 = binary.BigEndian.Uint16(portBuf)
-	// var port int = (int(portBuf[0]) << 8) | int(portBuf[1])
 
 	switch command {
 	case connectCommand:
@@ -169,7 +171,7 @@ func handleRequest(conn net.Conn) error {
 	case associateCommand:
 		fallthrough
 	default:
-		log.Fatalf("unsupported command: %x", command)
+		logger.Fatalf("unsupported command: %x", command)
 		return fmt.Errorf("unsupported command: %x", command)
 	}
 
@@ -178,11 +180,10 @@ func handleRequest(conn net.Conn) error {
 
 func handleConnect(conn net.Conn, destIp net.IP, destPort int) {
 	remoteAddr := net.JoinHostPort(destIp.String(), strconv.Itoa(destPort))
-	// remoteAddr := net.TCPAddr{destIp, destPort}
 	remoteConn, connErr := net.Dial("tcp", remoteAddr)
 
 	if connErr != nil {
-		log.Println("connect to remote host error")
+		logger.Errorf("connect to remote host error: ip:%s port:%d", destIp, destPort)
 		sendRequestReply(conn, hostUnreachable, []byte{0, 0, 0, 0}, 0)
 		return
 	}
@@ -196,12 +197,12 @@ func handleConnect(conn net.Conn, destIp net.IP, destPort int) {
 
 	for i := 0; i < 2; i++ {
 		name := <-c
-		log.Printf("%s done", name)
+		logger.Debugf("%s done", name)
 	}
 }
 
 func handleConnection(conn net.Conn) {
-	log.Printf("new connection acceptted from %s", conn.RemoteAddr())
+	logger.Infof("new connection acceptted from %s", conn.RemoteAddr())
 	defer conn.Close()
 
 	if err := readHeader(conn); err != nil {

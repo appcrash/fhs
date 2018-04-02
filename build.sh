@@ -1,4 +1,4 @@
 #!/bin/bash
 
 
-go build -o fhc ./client
+go build -i -o fhc ./client
