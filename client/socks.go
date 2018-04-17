@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
+	"github.com/appcrash/fhs/fhslib"
 	"io"
 	"net"
 	"strconv"
@@ -112,7 +113,7 @@ func handleRequest(conn net.Conn) error {
 	ver := buf[0]
 	command := buf[1]
 	addrType := buf[3]
-	logger.Infof("ver:%x cmd:%x, addrType: %x", ver, command, addrType)
+	logger.Debugf("ver:%x cmd:%x, addrType: %x", ver, command, addrType)
 	if ver != socks5Version {
 		logger.Errorln("request version not supported")
 		return fmt.Errorf("unsupported version")
@@ -180,25 +181,28 @@ func handleRequest(conn net.Conn) error {
 
 func handleConnect(conn net.Conn, destIp net.IP, destPort int) {
 	remoteAddr := net.JoinHostPort(destIp.String(), strconv.Itoa(destPort))
-	remoteConn, connErr := net.Dial("tcp", remoteAddr)
+	// remoteConn, connErr := net.Dial("tcp", remoteAddr)
 
-	if connErr != nil {
-		logger.Errorf("connect to remote host error: ip:%s port:%d", destIp, destPort)
-		sendRequestReply(conn, hostUnreachable, []byte{0, 0, 0, 0}, 0)
-		return
-	}
+	// if connErr != nil {
+	// 	logger.Errorf("connect to remote host error: ip:%s port:%d", destIp, destPort)
+	// 	sendRequestReply(conn, hostUnreachable, []byte{0, 0, 0, 0}, 0)
+	// 	return
+	// }
 
-	localBindAddr := remoteConn.LocalAddr().(*net.TCPAddr)
+	c := make(chan *net.TCPAddr)
+	fhslib.ResolveName(remoteAddr, c)
+	localBindAddr := <-c
+
 	sendRequestReply(conn, successReply, localBindAddr.IP, uint16(localBindAddr.Port))
 
-	c := make(chan string, 2)
-	go pipe(remoteConn, conn, "remote2client", c)
-	go pipe(conn, remoteConn, "client2remote", c)
+	// c := make(chan string, 2)
+	// go pipe(remoteConn, conn, "remote2client", c)
+	// go pipe(conn, remoteConn, "client2remote", c)
 
-	for i := 0; i < 2; i++ {
-		name := <-c
-		logger.Debugf("%s done", name)
-	}
+	// for i := 0; i < 2; i++ {
+	// 	name := <-c
+	// 	logger.Debugf("%s done", name)
+	// }
 }
 
 func handleConnection(conn net.Conn) {

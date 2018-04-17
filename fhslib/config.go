@@ -11,6 +11,10 @@ client:
   ip: localhost
   port: 1080
   loglevel: debug
+server:
+  ip: 127.0.0.1
+  bindip: 127.0.0.1
+  loglevel: debug
 `
 
 type Config struct {
@@ -20,6 +24,11 @@ type Config struct {
 	Client struct {
 		Ip       string
 		Port     int
+		Loglevel string
+	}
+	Server struct {
+		Ip       string
+		Bindip   string
 		Loglevel string
 	}
 }

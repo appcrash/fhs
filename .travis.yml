@@ -5,3 +5,4 @@ go:
 
 script:
   - go get github.com/appcrash/fhs/client
+  - go get github.com/appcrash/fhs/server
