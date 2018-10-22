@@ -60,10 +60,33 @@ func parseHeader(line string) ([]string, error) {
 	return []string{name, value}, nil
 }
 
+func AddAction(buf *bytes.Buffer, action string, location string) {
+	action = strings.ToUpper(action)
+	switch action {
+	case "GET":
+	case "POST":
+	case "UPDATE":
+	case "DELETE":
+		data := fmt.Sprintf("%s %s HTTP/1.1\r\n", action, location)
+		buf.WriteString(data)
+	default:
+		Log.Errorf("invalid action: %s", action)
+	}
+
+}
+
 func AddHeader(buf *bytes.Buffer, header string, value string) {
 	data := fmt.Sprintf("%s: %s\r\n", header, value)
 	Log.Debugf("add header string %s", data)
 	buf.WriteString(data)
+}
+
+func AddDelimiter(buf *bytes.Buffer) {
+	buf.WriteString("\r\n")
+}
+
+func AddData(buf *bytes.Buffer, data []byte) {
+	buf.Write(data)
 }
 
 func ParseHeaders(buf string) (Header, error) {
