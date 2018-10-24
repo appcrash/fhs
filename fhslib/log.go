@@ -30,15 +30,15 @@ func init() {
 
 func SetLogLevel(level string) {
 	switch level {
-	case "debug":
-		Log.SetLevel(logrus.DebugLevel)
+	case "info":
+		Log.SetLevel(logrus.InfoLevel)
 	case "error":
 		Log.SetLevel(logrus.ErrorLevel)
 	case "warn":
 		Log.SetLevel(logrus.WarnLevel)
-	case "info":
+	case "debug":
 		fallthrough
 	default:
-		Log.SetLevel(logrus.InfoLevel)
+		Log.SetLevel(logrus.DebugLevel)
 	}
 }
