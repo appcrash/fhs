@@ -190,7 +190,7 @@ func handleConnect(conn net.Conn, destIp net.IP, destPort int) {
 	// }
 
 	c := make(chan *net.TCPAddr)
-	fhslib.ResolveName(remoteAddr, c)
+	go fhslib.ResolveName(remoteAddr, c)
 	localBindAddr := <-c
 
 	sendRequestReply(conn, successReply, localBindAddr.IP, uint16(localBindAddr.Port))

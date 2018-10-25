@@ -153,7 +153,7 @@ func GetRequests(reader io.Reader, c chan *Request) {
 		}
 		action := string(rbuf[indexs[2]:indexs[3]])
 		rest := rbuf[indexs[1]:n]
-		Log.Infof("rest is %s", rest)
+		Log.Debugf("rest is %s", rest)
 
 		delimiter_index := delimiter_regex.FindIndex(rest)
 		if delimiter_index == nil {

@@ -1,7 +1,7 @@
 package fhslib
 
 import (
-	"bytes"
+	// "bytes"
 	// "encoding/binary"
 	// "bufio"
 	"io"
@@ -19,24 +19,32 @@ func (decoder *Decoder) Read(p []byte) (n int, err error) {
 }
 
 func (decoder *Decoder) WriteTo(writer io.Writer) (written int64, err error) {
-	var n int
-	wbuf := bytes.Buffer{}
-	rbuf := make([]byte, max_segment)
+	c := make(chan *Request)
 
+	go GetRequests(decoder.reader, c)
 	for {
-		n, err = decoder.reader.Read(rbuf)
-		if err != nil {
-			written += int64(n)
-			if err != io.EOF {
-				Log.Errorf("decoder read with error %s", err)
-			} else {
-				Log.Debugf("decoder read eof")
-			}
+		req := <-c
 
+		if req == nil {
+			Log.Debug("decoder has no more request")
 			return
 		}
 
-		n, err = writer.Write(wbuf.Bytes())
+		n := req.data.Len()
+		if n <= 0 {
+			Log.Errorf("decoder gets request with data len %d", n)
+			break
+		}
+
+		n, e := writer.Write(req.data.Bytes())
 		written += int64(n)
+		if e != nil {
+			err = e
+			Log.Errorf("decoder writer error")
+			return
+		}
+
 	}
+
+	return
 }

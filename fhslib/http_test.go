@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+func init() {
+	SetLogLevel("debug")
+}
+
 func TestHeader(t *testing.T) {
 	buf := bytes.Buffer{}
 	AddHeader(&buf, "Content-Length", "80")

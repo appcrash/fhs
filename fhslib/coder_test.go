@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+func init() {
+	SetLogLevel("debug")
+}
+
 func TestEncoder(t *testing.T) {
 	buf := bytes.Buffer{}
 	dest := bytes.Buffer{}
