@@ -148,7 +148,7 @@ func GetRequests(reader io.Reader, c chan *Request) {
 
 		indexs := action_regex.FindSubmatchIndex(rbuf)
 		if indexs == nil {
-			Log.Errorf("GetRequests can not find action line")
+			Log.Error("GetRequests can not find action line")
 			break
 		}
 		action := string(rbuf[indexs[2]:indexs[3]])
@@ -165,7 +165,7 @@ func GetRequests(reader io.Reader, c chan *Request) {
 		header, err := ParseHeaders(string(rest[:header_end]))
 		if err != nil {
 			Log.Errorf("header error %s", err)
-			Log.Errorf("GetRequests parse header error")
+			Log.Error("GetRequests parse header error")
 			break
 		}
 

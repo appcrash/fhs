@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -181,19 +182,33 @@ func handleRequest(conn net.Conn) error {
 
 func handleConnect(conn net.Conn, destIp net.IP, destPort int) {
 	remoteAddr := net.JoinHostPort(destIp.String(), strconv.Itoa(destPort))
-	// remoteConn, connErr := net.Dial("tcp", remoteAddr)
+	remoteConn, connErr := net.Dial("tcp", config.Server.Ip)
 
-	// if connErr != nil {
-	// 	logger.Errorf("connect to remote host error: ip:%s port:%d", destIp, destPort)
-	// 	sendRequestReply(conn, hostUnreachable, []byte{0, 0, 0, 0}, 0)
-	// 	return
-	// }
+	if connErr != nil {
+		logger.Error("connect to remote server error")
+		sendRequestReply(conn, hostUnreachable, []byte{0, 0, 0, 0}, 0)
+		return
+	}
 
-	c := make(chan *net.TCPAddr)
-	go fhslib.ResolveName(remoteAddr, c)
-	localBindAddr := <-c
+	encoder := NewRequestEncoder("key", conn, remoteConn)
+	decoder := NewResponseDecoder("key", remoteConn, conn)
+	encoder.WriteResolveRequest(remoteAddr)
+	decoder.Prepare()
+	req := decoder.GetRequest()
 
-	sendRequestReply(conn, successReply, localBindAddr.IP, uint16(localBindAddr.Port))
+	if req == nil {
+		logger.Error("decoder expect dns response but get nothing")
+		return
+	}
+	addr := req.data.String()
+	addr_array := Strings.Split(addr, ":")
+	ip, port := addr_array[0], addr_array[1]
+	logger.Debugf("remote local bind ip:%s, port:%s", ip, port)
+	sendRequestReply(conn, successReply, ip, strconv.Itoa(port))
+
+	// pipe bidirection
+	encoder.Start()
+	decoder.Start()
 
 	// c := make(chan string, 2)
 	// go pipe(remoteConn, conn, "remote2client", c)

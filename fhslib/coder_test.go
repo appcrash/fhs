@@ -2,7 +2,7 @@ package fhslib
 
 import (
 	"bytes"
-	"io"
+	// "io"
 	"testing"
 )
 
@@ -17,11 +17,8 @@ func TestEncoder(t *testing.T) {
 	test_str := "just test"
 	buf.Write([]byte(test_str))
 
-	encoder := Encoder{"key", &buf}
-	n, err := io.Copy(&dest, &encoder)
-	if err != io.EOF || n <= 0 {
-		t.Errorf("encoder error with err:%s   n:%d", err, n)
-	}
+	encoder := RequestEncoder{"key", &buf, &dest}
+	encoder.Start()
 
 	t.Logf("request detail:\n%s", dest.String())
 }

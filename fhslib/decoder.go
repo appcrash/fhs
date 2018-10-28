@@ -8,22 +8,41 @@ import (
 )
 
 // read from conn, decode data, write to conn
-type Decoder struct {
+type RequestDecoder struct {
 	key    string
 	reader io.Reader
+	writer io.Writer
+	c      chan *Request
 }
 
-func (decoder *Decoder) Read(p []byte) (n int, err error) {
+type ResponseDecoder struct {
+	RequestDecoder
+}
+
+func (decoder *RequestDecoder) NewRequestEncoder(key string, reader io.Reader, writer io.Writer) RequestDecoder {
+	return RequestDecoder{key, reader, writer, make(chan *Request)}
+}
+
+func (decoder *RequestDecoder) Read(p []byte) (n int, err error) {
 	n, err = decoder.reader.Read(p)
 	return
 }
 
-func (decoder *Decoder) WriteTo(writer io.Writer) (written int64, err error) {
-	c := make(chan *Request)
+func (decoder *RequestDecoder) Prepare() {
+	go GetRequests(decoder.reader, decoder.c)
+}
 
-	go GetRequests(decoder.reader, c)
+func (decoder *RequestDecoder) Start() {
+	io.Copy(decoder.writer, decoder)
+}
+
+func (decoder *RequestDecoder) GetRequest() *Request {
+	return <-decoder.c
+}
+
+func (decoder *RequestDecoder) WriteTo(writer io.Writer) (written int64, err error) {
 	for {
-		req := <-c
+		req := <-decoder.c
 
 		if req == nil {
 			Log.Debug("decoder has no more request")

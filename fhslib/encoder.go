@@ -8,19 +8,33 @@ import (
 )
 
 // read from conn, encode data, write to conn
-type Encoder struct {
+type RequestEncoder struct {
 	key    string
 	reader io.Reader
+	writer io.Writer
+}
+
+type ResponseEncoder struct {
+	RequestEncoder
 }
 
 const max_segment = 4096 // max request data
 
-func (encoder *Encoder) Read(p []byte) (n int, err error) {
+func NewRequestEncoder(key string, reader io.Reader, writer io.Writer) RequestEncoder {
+	return RequestEncoder{key, reader, writer}
+}
+
+func (encoder *RequestEncoder) Start() {
+	io.Copy(encoder.writer, encoder)
+	Log.Debug("request encoder done")
+}
+
+func (encoder *RequestEncoder) Read(p []byte) (n int, err error) {
 	n, err = encoder.reader.Read(p)
 	return
 }
 
-func (encoder *Encoder) WriteTo(writer io.Writer) (written int64, err error) {
+func (encoder *RequestEncoder) WriteTo(writer io.Writer) (written int64, err error) {
 	var n int
 	wbuf := bytes.Buffer{}
 	rbuf := make([]byte, max_segment)
@@ -46,4 +60,17 @@ func (encoder *Encoder) WriteTo(writer io.Writer) (written int64, err error) {
 		n, err = writer.Write(wbuf.Bytes())
 		written += int64(n)
 	}
+}
+
+func (encoder *RequestEncoder) WriteResolveRequest(domain string) error {
+	wbuf := bytes.Buffer{}
+
+	AddAction(&wbuf, "post", "/dns")
+	AddHeader(&wbuf, "host", "wwpp.com")
+	AddHeader(&wbuf, "content-length", strconv.Itoa(len(domain)))
+	AddDelimiter(&wbuf)
+	AddData(&wbuf, []byte(domain))
+
+	_, err := encoder.writer.Write(wbuf.Bytes())
+	return err
 }
