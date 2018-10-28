@@ -37,6 +37,8 @@ type Socks5Server struct {
 	listenAddr string
 }
 
+var config, _ = fhslib.GetConfig()
+
 func (s *Socks5Server) listen() {
 	l, err := net.Listen("tcp4", s.listenAddr)
 	if err != nil {
@@ -190,25 +192,27 @@ func handleConnect(conn net.Conn, destIp net.IP, destPort int) {
 		return
 	}
 
-	encoder := NewRequestEncoder("key", conn, remoteConn)
-	decoder := NewResponseDecoder("key", remoteConn, conn)
+	encoder := fhslib.NewRequestEncoder("key", conn, remoteConn)
+	decoder := fhslib.NewResponseDecoder("key", remoteConn, conn)
 	encoder.WriteResolveRequest(remoteAddr)
 	decoder.Prepare()
-	req := decoder.GetRequest()
+	resp := decoder.GetResponse()
 
-	if req == nil {
+	if resp == nil {
 		logger.Error("decoder expect dns response but get nothing")
 		return
 	}
-	addr := req.data.String()
-	addr_array := Strings.Split(addr, ":")
-	ip, port := addr_array[0], addr_array[1]
-	logger.Debugf("remote local bind ip:%s, port:%s", ip, port)
-	sendRequestReply(conn, successReply, ip, strconv.Itoa(port))
+	addr := resp.Data.String()
+	addr_array := strings.Split(addr, ":")
+	ip_str, port_str := addr_array[0], addr_array[1]
+	logger.Debugf("remote local bind ip:%s, port:%s", ip_str, port_str)
+	ip := net.ParseIP(ip_str)
+	port, _ := strconv.Atoi(port_str)
+	sendRequestReply(conn, successReply, ip, uint16(port))
 
 	// pipe bidirection
-	encoder.Start()
-	decoder.Start()
+	go encoder.Start()
+	go decoder.Start()
 
 	// c := make(chan string, 2)
 	// go pipe(remoteConn, conn, "remote2client", c)

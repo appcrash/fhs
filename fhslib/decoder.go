@@ -16,10 +16,14 @@ type RequestDecoder struct {
 }
 
 type ResponseDecoder struct {
-	RequestDecoder
+	key    string
+	reader io.Reader
+	writer io.Writer
+	c      chan *Response
 }
 
-func (decoder *RequestDecoder) NewRequestEncoder(key string, reader io.Reader, writer io.Writer) RequestDecoder {
+// -------------------------- Request Decoder ------------------------------------------
+func NewRequestDecoder(key string, reader io.Reader, writer io.Writer) RequestDecoder {
 	return RequestDecoder{key, reader, writer, make(chan *Request)}
 }
 
@@ -49,13 +53,13 @@ func (decoder *RequestDecoder) WriteTo(writer io.Writer) (written int64, err err
 			return
 		}
 
-		n := req.data.Len()
+		n := req.Data.Len()
 		if n <= 0 {
 			Log.Errorf("decoder gets request with data len %d", n)
 			break
 		}
 
-		n, e := writer.Write(req.data.Bytes())
+		n, e := writer.Write(req.Data.Bytes())
 		written += int64(n)
 		if e != nil {
 			err = e
@@ -66,4 +70,26 @@ func (decoder *RequestDecoder) WriteTo(writer io.Writer) (written int64, err err
 	}
 
 	return
+}
+
+// -------------------------- Response Decoder ------------------------------------------
+func NewResponseDecoder(key string, reader io.Reader, writer io.Writer) ResponseDecoder {
+	return ResponseDecoder{key, reader, writer, make(chan *Response)}
+}
+
+func (decoder *ResponseDecoder) Read(p []byte) (n int, err error) {
+	n, err = decoder.reader.Read(p)
+	return
+}
+
+func (decoder *ResponseDecoder) Prepare() {
+	go GetResponses(decoder.reader, decoder.c)
+}
+
+func (decoder *ResponseDecoder) Start() {
+	io.Copy(decoder.writer, decoder)
+}
+
+func (decoder *ResponseDecoder) GetResponse() *Response {
+	return <-decoder.c
 }

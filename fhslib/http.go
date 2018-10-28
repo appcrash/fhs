@@ -11,9 +11,15 @@ import (
 
 type Header map[string]string
 type Request struct {
-	action string
-	header *Header
-	data   *bytes.Buffer
+	Action string
+	Header *Header
+	Data   *bytes.Buffer
+}
+
+type Response struct {
+	State  string
+	Header *Header
+	Data   *bytes.Buffer
 }
 
 var config Config
@@ -111,7 +117,7 @@ func ParseHeaders(buf string) (Header, error) {
 		if i > 0 {
 			substr := search[:i]
 
-			Log.Info("substring is %s", substr)
+			Log.Infof("substring is %s", substr)
 			fields, e := parseHeader(substr)
 			if e != nil {
 				return nil, e
@@ -176,5 +182,18 @@ func GetRequests(reader io.Reader, c chan *Request) {
 		c <- &request
 	}
 
+	c <- nil
+}
+
+func GetResponses(reader io.Reader, c chan *Response) {
+	const bufsize = 128 * 1024
+	rbuf := make([]byte, bufsize)
+	var n int
+	var err error
+
+	n, err = reader.Read(rbuf)
+	if err != nil {
+		Log.Errorf("response reader error with n:%d", n)
+	}
 	c <- nil
 }

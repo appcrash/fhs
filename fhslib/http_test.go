@@ -42,7 +42,7 @@ func TestParseRequest(t *testing.T) {
 	go GetRequests(&buf, c)
 	req := <-c
 
-	t.Logf(req.action)
-	t.Logf("headers are %v", req.header)
-	t.Logf(req.data.String())
+	t.Logf(req.Action)
+	t.Logf("headers are %v", req.Header)
+	t.Logf(req.Data.String())
 }
