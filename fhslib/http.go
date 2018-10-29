@@ -91,6 +91,11 @@ func AddAction(buf *bytes.Buffer, action string, location string) {
 
 }
 
+func AddState(buf *bytes.Buffer, state int) {
+	data := fmt.Sprintf("HTTP/1.1 %d StateText\r\n", state)
+	buf.WriteString(data)
+}
+
 func AddHeader(buf *bytes.Buffer, header string, value string) {
 	data := fmt.Sprintf("%s: %s\r\n", header, value)
 	Log.Debugf("add header string %s", data)
@@ -159,7 +164,7 @@ func GetRequests(reader io.Reader, c chan *Request) {
 		}
 		action := string(rbuf[indexs[2]:indexs[3]])
 		rest := rbuf[indexs[1]:n]
-		Log.Debugf("rest is %s", rest)
+		// Log.Debugf("rest is %s", rest)
 
 		delimiter_index := delimiter_regex.FindIndex(rest)
 		if delimiter_index == nil {
@@ -190,10 +195,47 @@ func GetResponses(reader io.Reader, c chan *Response) {
 	rbuf := make([]byte, bufsize)
 	var n int
 	var err error
+	state_regex, _ := regexp.Compile(`(?i)http/(1.1|2)\s+(\d\d\d)\s+[^\r\n]+\r\n`)
+	delimiter_regex, _ := regexp.Compile(`\r\n\r\n`)
 
-	n, err = reader.Read(rbuf)
-	if err != nil {
-		Log.Errorf("response reader error with n:%d", n)
+	for {
+		n, err = reader.Read(rbuf)
+		if err != nil {
+			if err != io.EOF {
+				Log.Errorf("response reader error with error:%s", err)
+			}
+			break
+		}
+
+		indexs := state_regex.FindSubmatchIndex(rbuf)
+		if indexs == nil {
+			Log.Error("GetResponses can not find state line")
+			break
+		}
+
+		state := string(rbuf[indexs[4]:indexs[5]])
+		rest := rbuf[indexs[1]:n]
+
+		delimiter_index := delimiter_regex.FindIndex(rest)
+		if delimiter_index == nil {
+			Log.Error("GetRersponses can not find delimiter")
+			break
+		}
+
+		header_end := delimiter_index[1] - 2
+		header, err := ParseHeaders(string(rest[:header_end]))
+		if err != nil {
+			Log.Errorf("parse response header error %s", err)
+			break
+		}
+
+		data_buf := bytes.Buffer{}
+		data_buf.Write(rest[delimiter_index[1]:])
+
+		response := Response{state, &header, &data_buf}
+		c <- &response
+
 	}
+
 	c <- nil
 }

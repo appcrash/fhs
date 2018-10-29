@@ -2,6 +2,7 @@ package fhslib
 
 import (
 	"bytes"
+	"strconv"
 	"testing"
 )
 
@@ -45,4 +46,28 @@ func TestParseRequest(t *testing.T) {
 	t.Logf(req.Action)
 	t.Logf("headers are %v", req.Header)
 	t.Logf(req.Data.String())
+}
+
+func TestParseResponse(t *testing.T) {
+	buf := bytes.Buffer{}
+	content := "some response sample content"
+
+	AddState(&buf, 200)
+	AddHeader(&buf, "content-type", "text/html")
+	AddHeader(&buf, "content-length", strconv.Itoa(len(content)))
+	AddDelimiter(&buf)
+	AddData(&buf, []byte(content))
+
+	c := make(chan *Response)
+	go GetResponses(&buf, c)
+	resp := <-c
+
+	if resp == nil {
+		t.Error("parse response error")
+		return
+	}
+
+	t.Logf("response state code is %s", resp.State)
+	t.Logf("headers are %v", resp.Header)
+	t.Logf(resp.Data.String())
 }
