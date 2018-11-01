@@ -192,9 +192,9 @@ func handleConnect(conn net.Conn, destIp net.IP, destPort int) {
 		return
 	}
 
-	encoder := fhslib.NewRequestEncoder("key", conn, remoteConn)
-	decoder := fhslib.NewResponseDecoder("key", remoteConn, conn)
-	encoder.WriteResolveRequest(remoteAddr)
+	encoder := fhslib.NewRequestEncoder("key", conn)
+	decoder := fhslib.NewResponseDecoder("key", remoteConn)
+	encoder.WriteResolveRequest(remoteConn, remoteAddr)
 	decoder.Prepare()
 	resp := decoder.GetResponse()
 
@@ -211,17 +211,14 @@ func handleConnect(conn net.Conn, destIp net.IP, destPort int) {
 	sendRequestReply(conn, successReply, ip, uint16(port))
 
 	// pipe bidirection
-	go encoder.Start()
-	go decoder.Start()
+	c := make(chan string, 2)
+	go encoder.PipeTo(remoteConn, c)
+	go decoder.PipeTo(conn, c)
 
-	// c := make(chan string, 2)
-	// go pipe(remoteConn, conn, "remote2client", c)
-	// go pipe(conn, remoteConn, "client2remote", c)
-
-	// for i := 0; i < 2; i++ {
-	// 	name := <-c
-	// 	logger.Debugf("%s done", name)
-	// }
+	for i := 0; i < 2; i++ {
+		name := <-c
+		logger.Debugf("%s done", name)
+	}
 }
 
 func handleConnection(conn net.Conn) {

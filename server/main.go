@@ -18,6 +18,7 @@ func init() {
 }
 
 func main() {
-	s := fhslib.HttpServer{"127.0.0.1:8080"}
+	handler := Server{}
+	s := fhslib.HttpServer{"127.0.0.1:8080", &handler}
 	s.Listen()
 }

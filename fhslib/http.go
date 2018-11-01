@@ -12,6 +12,7 @@ import (
 type Header map[string]string
 type Request struct {
 	Action string
+	Path   string
 	Header *Header
 	Data   *bytes.Buffer
 }
@@ -30,6 +31,15 @@ func init() {
 
 type HttpServer struct {
 	ListenAddr string
+	Handler    ConnectionHandler
+}
+
+type ConnectionHandler interface {
+	HandleConnection(net.Conn)
+}
+
+func NewHttpServer(addr string, handler ConnectionHandler) HttpServer {
+	return HttpServer{addr, handler}
 }
 
 func (s *HttpServer) Listen() {
@@ -45,12 +55,12 @@ func (s *HttpServer) Listen() {
 			Log.Errorf("accept new connection failed")
 			panic(err)
 		}
-		go handleConnection(conn)
+		go s.handleConnection(conn)
 	}
 }
 
-func handleConnection(conn net.Conn) {
-
+func (s *HttpServer) handleConnection(conn net.Conn) {
+	s.Handler.HandleConnection(conn)
 }
 
 func ResolveName(name string, c chan *net.TCPAddr) {
@@ -145,7 +155,7 @@ func GetRequests(reader io.Reader, c chan *Request) {
 	rbuf := make([]byte, bufsize)
 	var n int
 	var err error
-	action_regex, _ := regexp.Compile(`(?i)(get|post)\s+/[/\w]*\s+http/(1.1|2)`)
+	action_regex, _ := regexp.Compile(`(?i)(get|post)\s+(/[/\w]*)\s+http/(1.1|2)`)
 	delimiter_regex, _ := regexp.Compile(`\r\n\r\n`)
 
 	for {
@@ -163,6 +173,7 @@ func GetRequests(reader io.Reader, c chan *Request) {
 			break
 		}
 		action := string(rbuf[indexs[2]:indexs[3]])
+		path := string(rbuf[indexs[4]:indexs[5]])
 		rest := rbuf[indexs[1]:n]
 		// Log.Debugf("rest is %s", rest)
 
@@ -183,7 +194,7 @@ func GetRequests(reader io.Reader, c chan *Request) {
 		data_buf := bytes.Buffer{}
 		data_buf.Write(rest[delimiter_index[1]:])
 
-		request := Request{action, &header, &data_buf}
+		request := Request{action, path, &header, &data_buf}
 		c <- &request
 	}
 
