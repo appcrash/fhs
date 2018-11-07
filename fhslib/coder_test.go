@@ -18,7 +18,7 @@ func TestEncoder(t *testing.T) {
 	test_str := "just test"
 	buf.Write([]byte(test_str))
 
-	encoder := NewRequestEncoder("key", &buf)
+	encoder := NewRequestEncoder("test", "key", &buf)
 	go encoder.PipeTo(&dest, c)
 	result := <-c
 

@@ -9,20 +9,22 @@ import (
 
 // read from conn, decode data, write to conn
 type RequestDecoder struct {
+	id     string
 	key    string
 	reader io.Reader
 	c      chan *Request
 }
 
 type ResponseDecoder struct {
+	id     string
 	key    string
 	reader io.Reader
 	c      chan *Response
 }
 
 // -------------------------- Request Decoder ------------------------------------------
-func NewRequestDecoder(key string, reader io.Reader) RequestDecoder {
-	return RequestDecoder{key, reader, make(chan *Request)}
+func NewRequestDecoder(id string, key string, reader io.Reader) RequestDecoder {
+	return RequestDecoder{id, key, reader, make(chan *Request)}
 }
 
 func (decoder *RequestDecoder) Read(p []byte) (n int, err error) {
@@ -36,10 +38,9 @@ func (decoder *RequestDecoder) Prepare() {
 
 func (decoder *RequestDecoder) PipeTo(writer io.Writer, c chan string) {
 	io.Copy(writer, decoder)
-	Log.Debug("request decoder done")
 
 	if c != nil {
-		c <- "request decoder doen"
+		c <- decoder.id + " request decoder"
 	}
 }
 
@@ -52,13 +53,13 @@ func (decoder *RequestDecoder) WriteTo(writer io.Writer) (written int64, err err
 		req := <-decoder.c
 
 		if req == nil {
-			Log.Debug("decoder has no more request")
+			Log.Debugf("(%s)request decoder has no more request", decoder.id)
 			return
 		}
 
-		n := req.Data.Len()
-		if n <= 0 {
-			Log.Errorf("decoder gets request with data len %d", n)
+		payload_len := req.Data.Len()
+		if payload_len <= 0 {
+			Log.Errorf("(%s)request decoder gets request with data len %d", decoder.id, payload_len)
 			break
 		}
 
@@ -66,9 +67,10 @@ func (decoder *RequestDecoder) WriteTo(writer io.Writer) (written int64, err err
 		written += int64(n)
 		if e != nil {
 			err = e
-			Log.Errorf("decoder writer error")
+			Log.Errorf("(%s)request decoder writer error", decoder.id)
 			return
 		}
+		Log.Debugf("(%s)request decoder write %d bytes with payload(%d)", decoder.id, n, payload_len)
 
 	}
 
@@ -76,8 +78,8 @@ func (decoder *RequestDecoder) WriteTo(writer io.Writer) (written int64, err err
 }
 
 // -------------------------- Response Decoder ------------------------------------------
-func NewResponseDecoder(key string, reader io.Reader) ResponseDecoder {
-	return ResponseDecoder{key, reader, make(chan *Response)}
+func NewResponseDecoder(id string, key string, reader io.Reader) ResponseDecoder {
+	return ResponseDecoder{id, key, reader, make(chan *Response)}
 }
 
 func (decoder *ResponseDecoder) Read(p []byte) (n int, err error) {
@@ -92,7 +94,7 @@ func (decoder *ResponseDecoder) Prepare() {
 func (decoder *ResponseDecoder) PipeTo(writer io.Writer, c chan string) {
 	io.Copy(writer, decoder)
 	if c != nil {
-		c <- "response decoder done"
+		c <- decoder.id + " response decoder"
 	}
 }
 

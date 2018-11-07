@@ -9,27 +9,28 @@ import (
 
 // read from conn, encode data, write to conn
 type RequestEncoder struct {
+	id     string
 	key    string
 	reader io.Reader
 }
 
 type ResponseEncoder struct {
+	id     string
 	key    string
 	reader io.Reader
 }
 
-const max_segment = 4096 // max request data
+const max_segment = 1024 * 1024 * 4 // max request data
 
-func NewRequestEncoder(key string, reader io.Reader) RequestEncoder {
-	return RequestEncoder{key, reader}
+func NewRequestEncoder(id string, key string, reader io.Reader) RequestEncoder {
+	return RequestEncoder{id, key, reader}
 }
 
 func (encoder *RequestEncoder) PipeTo(writer io.Writer, c chan string) {
 	io.Copy(writer, encoder)
-	Log.Debug("request encoder done")
 
 	if c != nil {
-		c <- "request encoder done"
+		c <- encoder.id + " request encoder"
 	}
 }
 
@@ -39,18 +40,18 @@ func (encoder *RequestEncoder) Read(p []byte) (n int, err error) {
 }
 
 func (encoder *RequestEncoder) WriteTo(writer io.Writer) (written int64, err error) {
-	var n int
+	var n, payload_len int
 	wbuf := bytes.Buffer{}
 	rbuf := make([]byte, max_segment)
 
 	for {
-		n, err = encoder.reader.Read(rbuf)
+		payload_len, err = encoder.reader.Read(rbuf)
 		if err != nil {
 			written += int64(n)
 			if err != io.EOF {
-				Log.Errorf("encoder read with error %s", err)
+				Log.Errorf("(%s)encoder read with error %s", encoder.id, err)
 			} else {
-				Log.Debug("encoder read eof")
+				Log.Debugf("(%s)encoder read eof", encoder.id)
 			}
 
 			return
@@ -61,8 +62,15 @@ func (encoder *RequestEncoder) WriteTo(writer io.Writer) (written int64, err err
 		AddHeader(&wbuf, "content-length", strconv.Itoa(n))
 		AddDelimiter(&wbuf)
 		AddData(&wbuf, rbuf)
+
 		n, err = writer.Write(wbuf.Bytes())
+		if err != nil {
+			Log.Errorf("(%s)request encoder write error with :%s", encoder.id, err)
+			return
+		}
+		Log.Debugf("(%s)request encoder write %d bytes payload", encoder.id, payload_len)
 		written += int64(n)
+
 	}
 }
 
@@ -80,16 +88,16 @@ func (encoder *RequestEncoder) WriteResolveRequest(writer io.Writer, domain stri
 }
 
 //-----------------------response encoder--------------------------------
-func NewResponseEncoder(key string, reader io.Reader) ResponseEncoder {
-	return ResponseEncoder{key, reader}
+func NewResponseEncoder(id string, key string, reader io.Reader) ResponseEncoder {
+
+	return ResponseEncoder{id, key, reader}
 }
 
 func (encoder *ResponseEncoder) PipeTo(writer io.Writer, c chan string) {
 	io.Copy(writer, encoder)
-	Log.Debug("response encoder done")
 
 	if c != nil {
-		c <- "response encoder done"
+		c <- encoder.id + " response encoder"
 	}
 }
 
@@ -122,6 +130,10 @@ func (encoder *ResponseEncoder) WriteTo(writer io.Writer) (written int64, err er
 		AddDelimiter(&wbuf)
 		AddData(&wbuf, rbuf)
 		n, err = writer.Write(wbuf.Bytes())
+		if err != nil {
+			Log.Errorf("(%s)response encoder write error with %s", encoder.id, err)
+		}
+		Log.Debugf("(%s)response encoder write %d bytes", encoder.id, n)
 		written += int64(n)
 	}
 }

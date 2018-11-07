@@ -108,7 +108,7 @@ func AddState(buf *bytes.Buffer, state int) {
 
 func AddHeader(buf *bytes.Buffer, header string, value string) {
 	data := fmt.Sprintf("%s: %s\r\n", header, value)
-	Log.Debugf("add header string %s", data)
+	// Log.Debugf("add header string %s", data)
 	buf.WriteString(data)
 }
 
@@ -128,11 +128,10 @@ func ParseHeaders(buf string) (Header, error) {
 
 	for i >= 0 {
 		i = strings.Index(search, "\r\n")
-		Log.Debugf("ParseHeaders: index is %d, search is %s", i, search)
+		// Log.Debugf("ParseHeaders: index is %d, search is %s", i, search)
 		if i > 0 {
 			substr := search[:i]
 
-			Log.Infof("substring is %s", substr)
 			fields, e := parseHeader(substr)
 			if e != nil {
 				return nil, e
@@ -151,7 +150,7 @@ func ParseHeaders(buf string) (Header, error) {
 }
 
 func GetRequests(reader io.Reader, c chan *Request) {
-	const bufsize = 128 * 1024
+	const bufsize = 1024 * 1024 * 4
 	rbuf := make([]byte, bufsize)
 	var n int
 	var err error

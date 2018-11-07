@@ -1,7 +1,10 @@
 package fhslib
 
 import (
+	"fmt"
 	"gopkg.in/yaml.v2"
+	"math/rand"
+	"time"
 )
 
 var defaultConfig = `
@@ -13,6 +16,7 @@ client:
   loglevel: debug
 server:
   ip: 127.0.0.1
+  port: 8080
   bindip: 127.0.0.1
   loglevel: debug
 `
@@ -28,9 +32,20 @@ type Config struct {
 	}
 	Server struct {
 		Ip       string
+		Port     int
 		Bindip   string
 		Loglevel string
 	}
+}
+
+func init() {
+	rand.Seed(time.Now().UTC().UnixNano())
+}
+
+func GenerateId() string {
+	id := rand.Uint32()
+	id_str := fmt.Sprintf("%08d", id)
+	return id_str
 }
 
 func GetConfig() (Config, error) {

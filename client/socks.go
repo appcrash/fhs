@@ -124,6 +124,7 @@ func handleRequest(conn net.Conn) error {
 
 	var ip net.IP
 	var ipLen int = 4
+	var domain string
 
 	// get destination's ip and port
 	switch addrType {
@@ -138,14 +139,14 @@ func handleRequest(conn net.Conn) error {
 			logger.Errorln("read fqdn error")
 			return err
 		}
-		domainName := string(fqdn)
-		if addr, err := net.ResolveIPAddr("ip", domainName); err != nil {
-			logger.Fatalf("resolving domain: %s error", domainName)
-			return err
-		} else {
-			ip = addr.IP
-		}
-		logger.Debugf("request domain: %s, ip: %s", domainName, ip)
+		domain = string(fqdn)
+		// if addr, err := net.ResolveIPAddr("ip", domain); err != nil {
+		// 	logger.Fatalf("resolving domain: %s error", domain)
+		// 	return err
+		// } else {
+		// 	ip = addr.IP
+		// }
+		logger.Debugf("request domain: %s", domain)
 	case ipv4Address:
 		fallthrough
 	case ipv6Address:
@@ -169,7 +170,7 @@ func handleRequest(conn net.Conn) error {
 
 	switch command {
 	case connectCommand:
-		handleConnect(conn, ip, int(port))
+		handleConnect(conn, domain, int(port))
 	case bindCommand:
 		fallthrough
 	case associateCommand:
@@ -182,19 +183,21 @@ func handleRequest(conn net.Conn) error {
 	return nil
 }
 
-func handleConnect(conn net.Conn, destIp net.IP, destPort int) {
-	remoteAddr := net.JoinHostPort(destIp.String(), strconv.Itoa(destPort))
-	remoteConn, connErr := net.Dial("tcp", config.Server.Ip)
+func handleConnect(conn net.Conn, domain string, dest_port int) {
+	remote_addr := net.JoinHostPort(domain, strconv.Itoa(dest_port))
+	fhs_server_addr := net.JoinHostPort(config.Server.Ip, strconv.Itoa(config.Server.Port))
+	fhs_server_conn, conn_err := net.Dial("tcp", fhs_server_addr)
 
-	if connErr != nil {
+	if conn_err != nil {
 		logger.Error("connect to remote server error")
 		sendRequestReply(conn, hostUnreachable, []byte{0, 0, 0, 0}, 0)
 		return
 	}
 
-	encoder := fhslib.NewRequestEncoder("key", conn)
-	decoder := fhslib.NewResponseDecoder("key", remoteConn)
-	encoder.WriteResolveRequest(remoteConn, remoteAddr)
+	track_id := fhslib.GenerateId()
+	encoder := fhslib.NewRequestEncoder(track_id, "key", conn)
+	decoder := fhslib.NewResponseDecoder(track_id, "key", fhs_server_conn)
+	encoder.WriteResolveRequest(fhs_server_conn, remote_addr)
 	decoder.Prepare()
 	resp := decoder.GetResponse()
 
@@ -203,16 +206,18 @@ func handleConnect(conn net.Conn, destIp net.IP, destPort int) {
 		return
 	}
 	addr := resp.Data.String()
+	logger.Debugf("dns response is %s", addr)
 	addr_array := strings.Split(addr, ":")
 	ip_str, port_str := addr_array[0], addr_array[1]
 	logger.Debugf("remote local bind ip:%s, port:%s", ip_str, port_str)
 	ip := net.ParseIP(ip_str)
 	port, _ := strconv.Atoi(port_str)
+	logger.Debugf("send socks reply with success ip: %s, port: %d", ip, port)
 	sendRequestReply(conn, successReply, ip, uint16(port))
 
 	// pipe bidirection
 	c := make(chan string, 2)
-	go encoder.PipeTo(remoteConn, c)
+	go encoder.PipeTo(fhs_server_conn, c)
 	go decoder.PipeTo(conn, c)
 
 	for i := 0; i < 2; i++ {
