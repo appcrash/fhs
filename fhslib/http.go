@@ -1,12 +1,21 @@
 package fhslib
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
 	"net"
 	"regexp"
 	"strings"
+)
+
+const (
+	stateFirstLine = iota
+	stateFirstLineMore
+	stateHeader
+	stateDelimiter
+	stateBody
 )
 
 type Header map[string]string
@@ -107,6 +116,7 @@ func AddState(buf *bytes.Buffer, state int) {
 }
 
 func AddHeader(buf *bytes.Buffer, header string, value string) {
+	header = strings.ToUpper(header)
 	data := fmt.Sprintf("%s: %s\r\n", header, value)
 	// Log.Debugf("add header string %s", data)
 	buf.WriteString(data)
@@ -136,7 +146,8 @@ func ParseHeaders(buf string) (Header, error) {
 			if e != nil {
 				return nil, e
 			}
-			h[fields[0]] = fields[1]
+			name := strings.ToUpper(fields[0])
+			h[name] = fields[1]
 		}
 
 		if i+3 >= len(search) {
@@ -154,10 +165,43 @@ func GetRequests(reader io.Reader, c chan *Request) {
 	rbuf := make([]byte, bufsize)
 	var n int
 	var err error
+	var line, more_line []byte
+	var has_more bool
 	action_regex, _ := regexp.Compile(`(?i)(get|post)\s+(/[/\w]*)\s+http/(1.1|2)`)
 	delimiter_regex, _ := regexp.Compile(`\r\n\r\n`)
+	rd := bufio.NewReader(reader)
 
+	state := stateFirstLine
 	for {
+		switch state {
+		case stateFirstLine:
+			if line, has_more, err = rd.ReadLine(); err != nil {
+				Log.Errorf("http get request when in state first line with error: %s", err)
+				break
+			}
+			if has_more {
+				Log.Debug("http get request when first line has more(too big)")
+				state = stateFirstLineMore
+				continue
+			}
+
+		case stateFirstLineMore:
+			if more_line, has_more, err = rd.ReadLine(); err != nil {
+				Log.Errorf("http get request when in state first more line wtih error: %s", err)
+				break
+			}
+			line = append(line, more_line...)
+			if !has_more {
+				if indexs := action_regex.FindSubmatchIndex(line); indexs == nil {
+					Log.Errorf("GetRequests can not find action line, line: %s", line)
+				}
+
+				state = stateHeader
+			}
+		case stateHeader:
+		case stateDelimiter:
+		case stateBody:
+		}
 		n, err = reader.Read(rbuf)
 		if err != nil {
 			if err != io.EOF {
