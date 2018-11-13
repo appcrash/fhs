@@ -83,12 +83,13 @@ func sendNoAuthReply(writer io.Writer) error {
 }
 
 func sendRequestReply(writer io.Writer, resp uint8, addr net.IP, port uint16) error {
-	data := make([]byte, 6+len(addr))
+	ip_len := 4 // currently only ipv4 supported
+	data := make([]byte, 6+ip_len)
 	data[0] = socks5Version
 	data[1] = resp
 	data[3] = ipv4Address
 	copy(data[4:], addr)
-	binary.BigEndian.PutUint16(data[4+len(addr):], port)
+	binary.BigEndian.PutUint16(data[4+ip_len:], port)
 	if _, err := writer.Write(data); err != nil {
 		logger.Errorln("send request reply error")
 		return err
@@ -109,7 +110,7 @@ func pipe(reader io.Reader, writer io.Writer, name string, c chan string) {
 func handleRequest(conn net.Conn) error {
 	buf := []byte{0, 0, 0, 0}
 	if num, err := io.ReadAtLeast(conn, buf, 4); err != nil {
-		logger.Fatalf("error when read request, only got %d bytes", num)
+		logger.Errorf("error when read request, only got %d bytes", num)
 		return err
 	}
 

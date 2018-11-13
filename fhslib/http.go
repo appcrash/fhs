@@ -432,7 +432,7 @@ Loop:
 				}
 			}
 
-			if err != nil {
+			if err != nil || body_left != 0 {
 				if err != io.EOF {
 					Log.Errorf("GetResponses read body with error %s when body_left:%d, body_length:%d",
 						err, body_left, body_length)

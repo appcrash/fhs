@@ -4,6 +4,7 @@ import (
 	// "bytes"
 	// "encoding/binary"
 	// "bufio"
+	// "crypto/md5"
 	"io"
 )
 
@@ -57,20 +58,26 @@ func (decoder *RequestDecoder) WriteTo(writer io.Writer) (written int64, err err
 			return
 		}
 
+		data := req.Data.Bytes()
 		payload_len := req.Data.Len()
+		current := 0
 		if payload_len <= 0 {
 			Log.Errorf("(%s)request decoder gets request with data len %d", decoder.id, payload_len)
 			break
 		}
 
-		n, e := writer.Write(req.Data.Bytes())
-		written += int64(n)
-		if e != nil {
-			err = e
-			Log.Errorf("(%s)request decoder writer error", decoder.id)
-			return
+		for current < payload_len {
+			n, e := writer.Write(data[current:payload_len])
+			written += int64(n)
+			if e != nil {
+				err = e
+				Log.Errorf("(%s)request decoder writer error", decoder.id)
+				return
+			}
+			current += n
 		}
-		Log.Debugf("(%s)request decoder write %d bytes with payload(%d)", decoder.id, n, payload_len)
+
+		Log.Debugf("(%s)request decoder write %d bytes with payload(%d)", decoder.id, current, payload_len)
 
 	}
 
@@ -111,19 +118,32 @@ func (decoder *ResponseDecoder) WriteTo(writer io.Writer) (written int64, err er
 			return
 		}
 
-		n := resp.Data.Len()
-		if n <= 0 {
-			Log.Errorf("response decoder gets response with data len %d", n)
+		data := resp.Data.Bytes()
+		total_len := resp.Data.Len()
+		current := 0
+		if total_len <= 0 {
+			Log.Errorf("(%s)response decoder gets response with data len %d", decoder.id, total_len)
 			break
 		}
 
-		n, e := writer.Write(resp.Data.Bytes())
-		written += int64(n)
-		if e != nil {
-			err = e
-			Log.Error("response decoder writer error")
-			return
+		// Log.Infof("(%s)response decoder get content md5sum:%x", decoder.id, md5.Sum(data))
+
+		for current < total_len {
+			n, e := writer.Write(data[current:total_len])
+
+			if e != nil {
+				err = e
+				if e != io.EOF {
+					Log.Errorf("(%s)response decoder writer error: %s", decoder.id, e)
+				}
+
+				return
+			}
+			current += n
+			written += int64(n)
 		}
+
+		Log.Infof("(%s)response decoder write %d bytes", decoder.id, current)
 
 	}
 
