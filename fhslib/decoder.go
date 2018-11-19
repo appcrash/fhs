@@ -5,6 +5,7 @@ import (
 	// "encoding/binary"
 	// "bufio"
 	// "crypto/md5"
+	"github.com/golang/snappy"
 	"io"
 )
 
@@ -118,15 +119,21 @@ func (decoder *ResponseDecoder) WriteTo(writer io.Writer) (written int64, err er
 			return
 		}
 
-		data := resp.Data.Bytes()
+		origin_data := resp.Data.Bytes()
 		total_len := resp.Data.Len()
-		current := 0
 		if total_len <= 0 {
 			Log.Errorf("(%s)response decoder gets response with data len %d", decoder.id, total_len)
 			break
 		}
 
 		// Log.Infof("(%s)response decoder get content md5sum:%x", decoder.id, md5.Sum(data))
+		data, decode_err := snappy.Decode(nil, origin_data)
+		if decode_err != nil {
+			Log.Errorf("(%s)response decoder snappy decoder error: %s", decode_err)
+			break
+		}
+		current := 0
+		total_len = len(data)
 
 		for current < total_len {
 			n, e := writer.Write(data[current:total_len])

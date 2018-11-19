@@ -4,6 +4,7 @@ import (
 	"bytes"
 	// "encoding/binary"
 	// "crypto/md5"
+	"github.com/golang/snappy"
 	"io"
 	"strconv"
 )
@@ -132,13 +133,16 @@ func (encoder *ResponseEncoder) WriteTo(writer io.Writer) (written int64, err er
 		// }
 
 		Log.Debugf("(%s)response encoder read %d bytes from reader", encoder.id, n)
+		encoded_buf := snappy.Encode(nil, rbuf[:n])
+		n = len(encoded_buf)
 		wbuf.Reset()
 		AddState(&wbuf, 200)
 		AddHeader(&wbuf, "content-type", "text/plain")
 		AddHeader(&wbuf, "host", "from-resp-encoder.com")
 		AddHeader(&wbuf, "content-length", strconv.Itoa(n))
 		AddDelimiter(&wbuf)
-		AddData(&wbuf, rbuf[:n])
+		//AddData(&wbuf, rbuf[:n])
+		AddData(&wbuf, encoded_buf[:n])
 		payload_len := n
 		n, err = writer.Write(wbuf.Bytes())
 		if err != nil {

@@ -32,6 +32,7 @@ func (s *Server) HandleConnection(conn net.Conn) {
 	remote_conn, err := net.Dial("tcp", domain)
 	if err != nil {
 		logger.Errorf("server connect to domain:  %s  ,error", domain)
+		return
 	}
 
 	addr, ok := remote_conn.LocalAddr().(*net.TCPAddr)
