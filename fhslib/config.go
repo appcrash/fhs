@@ -3,11 +3,12 @@ package fhslib
 import (
 	"fmt"
 	"gopkg.in/yaml.v2"
+	"io/ioutil"
 	"math/rand"
 	"time"
 )
 
-var defaultConfig = `
+const default_config = `
 common:
   password: hi
 client:
@@ -20,6 +21,8 @@ server:
   bindip: 127.0.0.1
   loglevel: debug
 `
+
+var fhslib_config *Config
 
 type Config struct {
 	Common struct {
@@ -39,6 +42,7 @@ type Config struct {
 }
 
 func init() {
+	ensureLogger()
 	rand.Seed(time.Now().UTC().UnixNano())
 }
 
@@ -48,8 +52,26 @@ func GenerateId() string {
 	return id_str
 }
 
-func GetConfig() (Config, error) {
-	var config Config
-	err := yaml.Unmarshal([]byte(defaultConfig), &config)
-	return config, err
+func GetConfig() Config {
+	if fhslib_config != nil {
+		return *fhslib_config
+	}
+
+	fhslib_config = &Config{}
+	yaml.Unmarshal([]byte(default_config), fhslib_config)
+
+	if data, err := ioutil.ReadFile("config.yml"); err != nil {
+		Log.Info("fhslib config file not found, use default config")
+	} else {
+		// override default config
+		err := yaml.Unmarshal(data, fhslib_config)
+		if err != nil {
+			Log.Error("fhslib config file format error")
+			panic(err)
+		}
+	}
+
+	Log.Infof("config is %+v", fhslib_config)
+
+	return *fhslib_config
 }

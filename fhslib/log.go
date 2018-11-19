@@ -9,23 +9,29 @@ import (
 var Log *logrus.Logger
 
 func init() {
-	Log = logrus.New()
-	formatter := &prefixed.TextFormatter{
-		ForceFormatting: true,
-		FullTimestamp:   true,
+	ensureLogger()
+}
+
+func ensureLogger() {
+	if Log == nil {
+		Log = logrus.New()
+		formatter := &prefixed.TextFormatter{
+			ForceFormatting: true,
+			FullTimestamp:   true,
+		}
+		Log.Formatter = formatter
+		hook := lfshook.NewHook(
+			lfshook.PathMap{
+				logrus.InfoLevel:  "info.log",
+				logrus.DebugLevel: "info.log",
+				logrus.FatalLevel: "error.log",
+				logrus.ErrorLevel: "error.log",
+				logrus.WarnLevel:  "error.log",
+			},
+			formatter,
+		)
+		Log.Hooks.Add(hook)
 	}
-	Log.Formatter = formatter
-	hook := lfshook.NewHook(
-		lfshook.PathMap{
-			logrus.InfoLevel:  "info.log",
-			logrus.DebugLevel: "info.log",
-			logrus.FatalLevel: "error.log",
-			logrus.ErrorLevel: "error.log",
-			logrus.WarnLevel:  "error.log",
-		},
-		formatter,
-	)
-	Log.Hooks.Add(hook)
 }
 
 func SetLogLevel(level string) {

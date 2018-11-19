@@ -38,12 +38,6 @@ type Response struct {
 	Data   *bytes.Buffer
 }
 
-var config Config
-
-func init() {
-	config, _ = GetConfig()
-}
-
 type HttpServer struct {
 	ListenAddr string
 	Handler    ConnectionHandler
@@ -79,7 +73,7 @@ func (s *HttpServer) handleConnection(conn net.Conn) {
 }
 
 func ResolveName(name string, c chan *net.TCPAddr) {
-	conn, err := net.Dial("tcp", config.Server.Ip)
+	conn, err := net.Dial("tcp", GetConfig().Server.Ip)
 	if err != nil {
 		c <- nil
 		return

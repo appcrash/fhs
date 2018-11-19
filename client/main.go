@@ -1,23 +1,22 @@
 package main
 
 import (
+	"fmt"
 	"github.com/appcrash/fhs/fhslib"
 	"github.com/sirupsen/logrus"
-	"log"
 )
 
 var logger *logrus.Logger
 
 func init() {
-	config, err := fhslib.GetConfig()
-	if err != nil {
-		log.Fatalf("config error %v", err)
-	}
+	config := fhslib.GetConfig()
 	logger = fhslib.Log
 	fhslib.SetLogLevel(config.Client.Loglevel)
 }
 
 func main() {
-	s := Socks5Server{"127.0.0.1:1090"}
+	config := fhslib.GetConfig()
+	addr := fmt.Sprintf("%s:%d", config.Client.Ip, config.Client.Port)
+	s := Socks5Server{addr}
 	s.listen()
 }

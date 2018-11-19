@@ -37,8 +37,6 @@ type Socks5Server struct {
 	listenAddr string
 }
 
-var config, _ = fhslib.GetConfig()
-
 func (s *Socks5Server) listen() {
 	l, err := net.Listen("tcp4", s.listenAddr)
 	if err != nil {
@@ -185,6 +183,7 @@ func handleRequest(conn net.Conn) error {
 }
 
 func handleConnect(conn net.Conn, domain string, dest_port int) {
+	config := fhslib.GetConfig()
 	remote_addr := net.JoinHostPort(domain, strconv.Itoa(dest_port))
 	fhs_server_addr := net.JoinHostPort(config.Server.Ip, strconv.Itoa(config.Server.Port))
 	fhs_server_conn, conn_err := net.Dial("tcp", fhs_server_addr)
