@@ -11,6 +11,7 @@ import (
 const default_config = `
 common:
   password: hi
+  maxconnection: 3
 client:
   ip: localhost
   port: 1080
@@ -26,7 +27,8 @@ var fhslib_config *Config
 
 type Config struct {
 	Common struct {
-		Password string
+		Password      string
+		MaxConnection int
 	}
 	Client struct {
 		Ip       string

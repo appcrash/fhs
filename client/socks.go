@@ -4,11 +4,11 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
-	"github.com/appcrash/fhs/fhslib"
+	// "github.com/appcrash/fhs/fhslib"
 	"io"
 	"net"
-	"strconv"
-	"strings"
+	// "strconv"
+	// "strings"
 )
 
 const (
@@ -95,16 +95,6 @@ func sendRequestReply(writer io.Writer, resp uint8, addr net.IP, port uint16) er
 	return nil
 }
 
-func pipe(reader io.Reader, writer io.Writer, name string, c chan string) {
-	_, err := io.Copy(writer, reader)
-	logger.Debugf("pipe %s done", name)
-	if err != nil {
-		logger.Errorf("pipe %s error: %v", name, err)
-	}
-
-	c <- name
-}
-
 func handleRequest(conn net.Conn) error {
 	buf := []byte{0, 0, 0, 0}
 	if num, err := io.ReadAtLeast(conn, buf, 4); err != nil {
@@ -165,11 +155,11 @@ func handleRequest(conn net.Conn) error {
 		logger.Errorln("read request port error")
 		return err
 	}
-	var port uint16 = binary.BigEndian.Uint16(portBuf)
+	// var port uint16 = binary.BigEndian.Uint16(portBuf)
 
 	switch command {
 	case connectCommand:
-		handleConnect(conn, domain, int(port))
+		// handleConnect(conn, domain, int(port))
 	case bindCommand:
 		fallthrough
 	case associateCommand:
@@ -182,49 +172,49 @@ func handleRequest(conn net.Conn) error {
 	return nil
 }
 
-func handleConnect(conn net.Conn, domain string, dest_port int) {
-	config := fhslib.GetConfig()
-	remote_addr := net.JoinHostPort(domain, strconv.Itoa(dest_port))
-	fhs_server_addr := net.JoinHostPort(config.Server.Ip, strconv.Itoa(config.Server.Port))
-	fhs_server_conn, conn_err := net.Dial("tcp", fhs_server_addr)
+// func handleConnect(conn net.Conn, domain string, dest_port int) {
+// 	config := fhslib.GetConfig()
+// 	remote_addr := net.JoinHostPort(domain, strconv.Itoa(dest_port))
+// 	fhs_server_addr := net.JoinHostPort(config.Server.Ip, strconv.Itoa(config.Server.Port))
+// 	fhs_server_conn, conn_err := net.Dial("tcp", fhs_server_addr)
 
-	if conn_err != nil {
-		logger.Error("connect to remote server error")
-		sendRequestReply(conn, hostUnreachable, []byte{0, 0, 0, 0}, 0)
-		return
-	}
+// 	if conn_err != nil {
+// 		logger.Error("connect to remote server error")
+// 		sendRequestReply(conn, hostUnreachable, []byte{0, 0, 0, 0}, 0)
+// 		return
+// 	}
 
-	track_id := fhslib.GenerateId()
-	encoder := fhslib.NewRequestEncoder(track_id, "key", conn)
-	decoder := fhslib.NewResponseDecoder(track_id, "key", fhs_server_conn)
-	encoder.WriteResolveRequest(fhs_server_conn, remote_addr)
-	decoder.Prepare()
-	resp := decoder.GetResponse()
+// 	track_id := fhslib.GenerateId()
+// 	encoder := fhslib.NewRequestEncoder(track_id, "key", conn)
+// 	decoder := fhslib.NewResponseDecoder(track_id, "key", fhs_server_conn)
+// 	encoder.WriteResolveRequest(fhs_server_conn, remote_addr)
+// 	decoder.Prepare()
+// 	resp := decoder.GetResponse()
 
-	if resp == nil {
-		logger.Error("decoder expect dns response but get nothing")
-		return
-	}
-	addr := resp.Data.String()
-	logger.Debugf("dns response is %s", addr)
-	addr_array := strings.Split(addr, ":")
-	ip_str, port_str := addr_array[0], addr_array[1]
-	logger.Debugf("remote local bind ip:%s, port:%s", ip_str, port_str)
-	ip := net.ParseIP(ip_str)
-	port, _ := strconv.Atoi(port_str)
-	logger.Debugf("send socks reply with success ip: %s, port: %d", ip, port)
-	sendRequestReply(conn, successReply, ip, uint16(port))
+// 	if resp == nil {
+// 		logger.Error("decoder expect dns response but get nothing")
+// 		return
+// 	}
+// 	addr := resp.Data.String()
+// 	logger.Debugf("dns response is %s", addr)
+// 	addr_array := strings.Split(addr, ":")
+// 	ip_str, port_str := addr_array[0], addr_array[1]
+// 	logger.Debugf("remote local bind ip:%s, port:%s", ip_str, port_str)
+// 	ip := net.ParseIP(ip_str)
+// 	port, _ := strconv.Atoi(port_str)
+// 	logger.Debugf("send socks reply with success ip: %s, port: %d", ip, port)
+// 	sendRequestReply(conn, successReply, ip, uint16(port))
 
-	// pipe bidirection
-	c := make(chan string, 2)
-	go encoder.PipeTo(fhs_server_conn, c)
-	go decoder.PipeTo(conn, c)
+// 	// pipe bidirection
+// 	c := make(chan string, 2)
+// 	go encoder.PipeTo(fhs_server_conn, c)
+// 	go decoder.PipeTo(conn, c)
 
-	for i := 0; i < 2; i++ {
-		name := <-c
-		logger.Debugf("%s done", name)
-	}
-}
+// 	for i := 0; i < 2; i++ {
+// 		name := <-c
+// 		logger.Debugf("%s done", name)
+// 	}
+// }
 
 func handleConnection(conn net.Conn) {
 	logger.Infof("new connection acceptted from %s", conn.RemoteAddr())
