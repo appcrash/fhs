@@ -29,10 +29,10 @@ func NewRequestEncoder(id string, key string, writer io.Writer) RequestEncoder {
 	return RequestEncoder{id, key, writer}
 }
 
-func (encoder *RequestEncoder) SendData(tunnel_id int, data []byte) (int, error) {
+func (encoder *RequestEncoder) SendData(tunnel_id string, data []byte) (int, error) {
 	wbuf := bytes.Buffer{}
 	payload_len := len(data)
-	path := fmt.Sprintf("/img/%d", tunnel_id)
+	path := fmt.Sprintf("/img/%s", tunnel_id)
 	AddAction(&wbuf, "post", path)
 	AddHeader(&wbuf, "content-type", "text/plain")
 	AddHeader(&wbuf, "host", "from-req-encoder.com")
@@ -43,10 +43,10 @@ func (encoder *RequestEncoder) SendData(tunnel_id int, data []byte) (int, error)
 	return encoder.writer.Write(wbuf.Bytes())
 }
 
-func (encoder *RequestEncoder) SendNewTunnel(tunnel_id int, domain string) error {
+func (encoder *RequestEncoder) SendNewTunnel(tunnel_id string, domain string) error {
 	wbuf := bytes.Buffer{}
 	payload_len := len(domain)
-	path := fmt.Sprintf("/new/%d", tunnel_id)
+	path := fmt.Sprintf("/new/%s", tunnel_id)
 	AddAction(&wbuf, "post", path)
 	AddHeader(&wbuf, "content-type", "text/plain")
 	AddHeader(&wbuf, "host", "from-req-encoder.com")
@@ -55,6 +55,19 @@ func (encoder *RequestEncoder) SendNewTunnel(tunnel_id int, domain string) error
 	AddData(&wbuf, []byte(domain))
 
 	_, err := encoder.writer.Write(wbuf.Bytes())
+	return err
+}
+
+func (encoder *RequestEncoder) Send(packet *Packet) error {
+	var err error
+	tid := packet.TunnelId
+	switch packet.Cmd {
+	case dtTunnelInfo:
+		err = encoder.SendNewTunnel(tid, packet.Data.String())
+	case dtTunnelData:
+		_, err = encoder.SendData(tid, packet.Data.Bytes())
+	}
+
 	return err
 }
 

@@ -2,7 +2,7 @@ package fhslib
 
 import (
 	"bytes"
-	// "math/rand"
+	"math/rand"
 	"net"
 	"strconv"
 )
@@ -30,11 +30,11 @@ type ClientHttpSocket struct {
 }
 
 type ClientConnectionTracker struct {
-	socks_map           map[string]*ClientHttpSocket
-	tunnel_map          map[string]*net.Conn
-	channel_send_packet chan *Packet
-	channel_recv_packet chan *Packet
-	channel_error       chan *ErrorInfo
+	socks_map              map[string]*ClientHttpSocket // socket tracck id => http socks
+	tunnel_map             map[string]net.Conn          // tunnel id => local client connection
+	channel_sendbuf_packet chan *Packet
+	channel_recvbuf_packet chan *Packet
+	channel_error          chan *ErrorInfo
 }
 
 func newClientHttpSocket(track_id string) (*ClientHttpSocket, error) {
@@ -52,8 +52,8 @@ func newClientHttpSocket(track_id string) (*ClientHttpSocket, error) {
 
 func NewClientConnecionTracker() ClientConnectionTracker {
 	smap := make(map[string]*ClientHttpSocket)
-	tmap := make(map[string]*net.Conn)
-	csend, crecv := make(chan *Packet), make(chan *Packet)
+	tmap := make(map[string]net.Conn)
+	csend, crecv := make(chan *Packet, 10), make(chan *Packet, 10)
 	cerror := make(chan *ErrorInfo)
 	return ClientConnectionTracker{smap, tmap, csend, crecv, cerror}
 }
@@ -79,34 +79,47 @@ func (tracker *ClientConnectionTracker) AddHttpSocket() {
 
 func (tracker *ClientConnectionTracker) Send(tunnel_id string, data *bytes.Buffer) {
 	p := Packet{dtTunnelData, tunnel_id, data}
-	tracker.channel_send_packet <- &p
+	tracker.channel_sendbuf_packet <- &p
 }
 
-// func (t *ClientConnectionTracker) Loop() {
-// 	for {
-// 		select {
-// 		case p <- t.channel_send_packet:
-// 			n := len(t.socks_map)
-// 			n = rand.intn(n)
+func (t *ClientConnectionTracker) Loop() {
+	var sock *ClientHttpSocket
+	for {
+		select {
+		case p := <-t.channel_sendbuf_packet:
+			n := len(t.socks_map)
+			n = rand.Intn(n)
+			for _, sock = range t.socks_map {
+				n--
+				if n == 0 {
+					break
+				}
+			}
+			if err := sock.encoder.Send(p); err != nil {
+				Log.Errorf("send packet error:%s", err)
+			}
+		case p := <-t.channel_recvbuf_packet:
+			if p == nil {
+				continue
+			}
+			tid := p.TunnelId
+			if conn, ok := t.tunnel_map[tid]; ok {
+				data := p.Data.Bytes()
+				if _, err := conn.Write(data); err != nil {
+					Log.Errorf("write data back to tunnel:%s error with:%s ", tid, err)
+				}
+			} else {
+				Log.Debugf("discard tunnel:(%s) data as it closed", tid)
+			}
+		case e := <-t.channel_error:
+			if e == nil {
+				Log.Error("error channel get nil")
+				continue
+			}
+			id := e.TunnelId
+			Log.Debugf("(%s) tunnel closed due to %s", id, e.Error)
+			delete(t.tunnel_map, id)
+		}
+	}
 
-// 		case p <- t.channel_recv_packet:
-// 			if p == nil {
-// 				continue
-// 			}
-// 			id := p.TunnelId
-// 			if conn, ok := t.tunnel_map[id]; ok {
-// 				data := p.Data.Bytes()
-// 			}
-// 		case e <- t.channel_error:
-// 			if e == nil {
-// 				Log.Error("error channel get nil")
-// 				continue
-// 			}
-// 			id := e.TunnelId
-// 			Log.Debugf("(%s) tunnel closed due to %s", id, e.Error)
-// 			delete(t.tunnel_map, id)
-
-// 		}
-// 	}
-
-// }
+}
