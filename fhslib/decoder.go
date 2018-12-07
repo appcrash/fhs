@@ -1,68 +1,61 @@
 package fhslib
 
 import (
-	"bytes"
+	// "bytes"
 	// "encoding/binary"
 	// "bufio"
 	// "crypto/md5"
 	// "fmt"
 	"github.com/golang/snappy"
-	"io"
+	// "io"
 	"regexp"
 )
 
 // read from conn, decode data, write to conn
 type RequestDecoder struct {
-	id     string
-	key    string
-	reader io.Reader
+	id  string
+	key string
 }
 
 type ResponseDecoder struct {
-	id     string
-	key    string
-	reader io.Reader
+	id  string
+	key string
+}
+
+type Decoder interface {
+	Decode(interface{}) *Packet
 }
 
 // -------------------------- Request Decoder ------------------------------------------
-func NewRequestDecoder(id string, key string, reader io.Reader) RequestDecoder {
-	return RequestDecoder{id, key, reader}
+func NewRequestDecoder(id string, key string) RequestDecoder {
+	return RequestDecoder{id, key}
 }
 
-func (decoder *RequestDecoder) Receive(ch_packet chan<- *Packet) {
-	c := make(chan *Request)
+func (decoder *RequestDecoder) Decode(request *Request) *Packet {
 	path_regex, _ := regexp.Compile(`/([^/]+)/(.+)`)
-	go GetRequests(decoder.reader, c)
-	for {
-		request := <-c
-		if request == nil {
-			ch_packet <- nil
-			break
-		}
 
-		var cmd_type int
-		var tunnel_id, cmd string
-		path := request.Path
-		if i := path_regex.FindSubmatchIndex([]byte(path)); i == nil {
-			Log.Debugf("(%s)reqeust decoder: can not parse request path:%s", decoder.id, path)
-			continue // ignore this request
-		} else {
-			cmd = path[i[2]:i[3]]
-			tunnel_id = path[i[4]:i[5]]
-		}
-
-		switch cmd {
-		case "img":
-			cmd_type = dtTunnelData
-		case "new":
-			cmd_type = dtTunnelInfo
-		default:
-			Log.Debugf("(%s)request decoder: can not recognize path cmd:%s", decoder.id, cmd)
-			continue // ignore this request
-		}
-
-		ch_packet <- &Packet{cmd_type, tunnel_id, request.Data}
+	var cmd_type int
+	var tunnel_id, cmd string
+	path := request.Path
+	if i := path_regex.FindSubmatchIndex([]byte(path)); i == nil {
+		Log.Debugf("(%s)reqeust decoder: can not parse request path:%s", decoder.id, path)
+		return nil // ignore this request
+	} else {
+		cmd = path[i[2]:i[3]]
+		tunnel_id = path[i[4]:i[5]]
 	}
+
+	switch cmd {
+	case "img":
+		cmd_type = dtTunnelData
+	case "new":
+		cmd_type = dtTunnelInfo
+	default:
+		Log.Debugf("(%s)request decoder: can not recognize path cmd:%s", decoder.id, cmd)
+		return nil
+	}
+
+	return &Packet{cmd_type, tunnel_id, request.Data.Bytes()}
 }
 
 // func (decoder *RequestDecoder) WriteTo(writer io.Writer) (written int64, err error) {
@@ -101,54 +94,44 @@ func (decoder *RequestDecoder) Receive(ch_packet chan<- *Packet) {
 // }
 
 // -------------------------- Response Decoder ------------------------------------------
-func NewResponseDecoder(id string, key string, reader io.Reader) ResponseDecoder {
-	return ResponseDecoder{id, key, reader}
+func NewResponseDecoder(id string, key string) ResponseDecoder {
+	return ResponseDecoder{id, key}
 }
 
-func (decoder *ResponseDecoder) Receive(ch_packet chan<- *Packet) {
-	c := make(chan *Response)
+func (decoder *ResponseDecoder) Decode(response *Response) *Packet {
+	var cmd_type int
+	var tunnel_id, cmd string
 	cookie_regex, _ := regexp.Compile(`([^=]+)=(.+)`)
-	go GetResponses(decoder.reader, c)
-	for {
-		response := <-c
-		if response == nil {
-			ch_packet <- nil
-			break
-		}
-
-		var cmd_type int
-		var tunnel_id, cmd string
-		if cookie, ok := (*response.Header)["COOKIE"]; !ok {
-			Log.Debugf("(%s)response decoder: can not find cookies", decoder.id)
-			continue // ignore this response
+	if cookie, ok := (*response.Header)["COOKIE"]; !ok {
+		Log.Debugf("(%s)response decoder: can not find cookies", decoder.id)
+		return nil // ignore this response
+	} else {
+		if i := cookie_regex.FindSubmatchIndex([]byte(cookie)); i == nil {
+			Log.Debugf("(%s)response decoder: can not parse cookie string:%s", decoder.id, cookie)
+			return nil
 		} else {
-			if i := cookie_regex.FindSubmatchIndex([]byte(cookie)); i == nil {
-				Log.Debugf("(%s)response decoder: can not parse cookie string:%s", decoder.id, cookie)
-				continue // ignore this response
-			} else {
-				cmd = cookie[i[2]:i[3]]
-				tunnel_id = cookie[i[4]:i[5]]
-			}
+			cmd = cookie[i[2]:i[3]]
+			tunnel_id = cookie[i[4]:i[5]]
 		}
-
-		switch cmd {
-		case "data":
-			cmd_type = dtTunnelData
-		case "domain":
-			cmd_type = dtTunnelInfo
-		default:
-			Log.Debugf("(%s)request decoder: can not recognize path cmd:%s", decoder.id, cmd)
-			continue // ignore this request
-		}
-
-		data, decode_err := snappy.Decode(nil, response.Data.Bytes())
-		if decode_err != nil {
-			Log.Errorf("(%s)response decoder: snappy decode data error %s", decoder.id, decode_err)
-			continue
-		}
-
-		ch_packet <- &Packet{cmd_type, tunnel_id, bytes.NewBuffer(data)}
 	}
+
+	switch cmd {
+	case "data":
+		cmd_type = dtTunnelData
+	case "domain":
+		cmd_type = dtTunnelInfo
+	default:
+		Log.Debugf("(%s)request decoder: can not recognize path cmd:%s", decoder.id, cmd)
+		return nil
+	}
+
+	data, decode_err := snappy.Decode(nil, response.Data.Bytes())
+	if decode_err != nil {
+		Log.Errorf("(%s)response decoder: snappy decode data error %s", decoder.id, decode_err)
+		return nil
+	}
+
+	return &Packet{cmd_type, tunnel_id, data}
 }
 
 // func (decoder *ResponseDecoder) WriteTo(writer io.Writer) (written int64, err error) {

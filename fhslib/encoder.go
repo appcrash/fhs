@@ -6,30 +6,32 @@ import (
 	// "crypto/md5"
 	"fmt"
 	"github.com/golang/snappy"
-	"io"
+	// "io"
 	"strconv"
 )
 
 // read from conn, encode data, write to conn
 type RequestEncoder struct {
-	id     string
-	key    string
-	writer io.Writer
+	id  string
+	key string
 }
 
 type ResponseEncoder struct {
-	id     string
-	key    string
-	writer io.Writer
+	id  string
+	key string
+}
+
+type Encoder interface {
+	Encode(*Packet) []byte
 }
 
 const max_segment = 1024 * 32 // max request data
 
-func NewRequestEncoder(id string, key string, writer io.Writer) RequestEncoder {
-	return RequestEncoder{id, key, writer}
+func NewRequestEncoder(id string, key string) RequestEncoder {
+	return RequestEncoder{id, key}
 }
 
-func (encoder *RequestEncoder) SendData(tunnel_id string, data []byte) (int, error) {
+func (encoder *RequestEncoder) encodeData(tunnel_id string, data []byte) []byte {
 	wbuf := bytes.Buffer{}
 	payload_len := len(data)
 	path := fmt.Sprintf("/img/%s", tunnel_id)
@@ -40,10 +42,10 @@ func (encoder *RequestEncoder) SendData(tunnel_id string, data []byte) (int, err
 	AddDelimiter(&wbuf)
 	AddData(&wbuf, data)
 
-	return encoder.writer.Write(wbuf.Bytes())
+	return wbuf.Bytes()
 }
 
-func (encoder *RequestEncoder) SendNewTunnel(tunnel_id string, domain string) error {
+func (encoder *RequestEncoder) encodeNewTunnel(tunnel_id string, domain string) []byte {
 	wbuf := bytes.Buffer{}
 	payload_len := len(domain)
 	path := fmt.Sprintf("/new/%s", tunnel_id)
@@ -54,21 +56,18 @@ func (encoder *RequestEncoder) SendNewTunnel(tunnel_id string, domain string) er
 	AddDelimiter(&wbuf)
 	AddData(&wbuf, []byte(domain))
 
-	_, err := encoder.writer.Write(wbuf.Bytes())
-	return err
+	return wbuf.Bytes()
 }
 
-func (encoder *RequestEncoder) Send(packet *Packet) error {
-	var err error
+func (encoder *RequestEncoder) Encode(packet *Packet) (data []byte) {
 	tid := packet.TunnelId
 	switch packet.Cmd {
 	case dtTunnelInfo:
-		err = encoder.SendNewTunnel(tid, packet.Data.String())
+		data = encoder.encodeNewTunnel(tid, string(packet.Data))
 	case dtTunnelData:
-		_, err = encoder.SendData(tid, packet.Data.Bytes())
+		data = encoder.encodeData(tid, packet.Data)
 	}
-
-	return err
+	return
 }
 
 // func (encoder *RequestEncoder) WriteTo(writer io.Writer) (written int64, err error) {
@@ -109,16 +108,16 @@ func (encoder *RequestEncoder) Send(packet *Packet) error {
 // }
 
 //-----------------------response encoder--------------------------------
-func NewResponseEncoder(id string, key string, writer io.Writer) ResponseEncoder {
+func NewResponseEncoder(id string, key string) ResponseEncoder {
 
-	return ResponseEncoder{id, key, writer}
+	return ResponseEncoder{id, key}
 }
 
-func (encoder *ResponseEncoder) SendData(tunnel_id int, data []byte) (int, error) {
+func (encoder *ResponseEncoder) encodeData(tunnel_id string, data []byte) []byte {
 	wbuf := bytes.Buffer{}
 	data = snappy.Encode(nil, data)
 	payload_len := len(data)
-	cookie_str := fmt.Sprintf("data=%d", tunnel_id)
+	cookie_str := fmt.Sprintf("data=%s", tunnel_id)
 	AddState(&wbuf, 200)
 	AddHeader(&wbuf, "content-type", "text/plain")
 	AddHeader(&wbuf, "host", "from-resp-encoder.com")
@@ -127,14 +126,14 @@ func (encoder *ResponseEncoder) SendData(tunnel_id int, data []byte) (int, error
 	AddDelimiter(&wbuf)
 	AddData(&wbuf, data)
 
-	return encoder.writer.Write(wbuf.Bytes())
+	return wbuf.Bytes()
 }
 
-func (encoder *ResponseEncoder) SendNewTunnel(tunnel_id int, domain string) error {
+func (encoder *ResponseEncoder) encodeNewTunnel(tunnel_id string, domain string) []byte {
 	wbuf := bytes.Buffer{}
 	data := snappy.Encode(nil, []byte(domain))
 	payload_len := len(data)
-	cookie_str := fmt.Sprintf("domain=%d", tunnel_id)
+	cookie_str := fmt.Sprintf("domain=%s", tunnel_id)
 	AddState(&wbuf, 200)
 	AddHeader(&wbuf, "content-type", "text/plain")
 	AddHeader(&wbuf, "host", "from-req-encoder.com")
@@ -143,8 +142,18 @@ func (encoder *ResponseEncoder) SendNewTunnel(tunnel_id int, domain string) erro
 	AddDelimiter(&wbuf)
 	AddData(&wbuf, data)
 
-	_, err := encoder.writer.Write(wbuf.Bytes())
-	return err
+	return wbuf.Bytes()
+}
+
+func (encoder *ResponseEncoder) Encode(packet *Packet) (data []byte) {
+	tid := packet.TunnelId
+	switch packet.Cmd {
+	case dtTunnelInfo:
+		data = encoder.encodeNewTunnel(tid, string(packet.Data))
+	case dtTunnelData:
+		data = encoder.encodeData(tid, packet.Data)
+	}
+	return
 }
 
 // func (encoder *ResponseEncoder) WriteTo(writer io.Writer) (written int64, err error) {
