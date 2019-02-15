@@ -47,9 +47,9 @@ func (decoder *RequestDecoder) Decode(request *Request) *Packet {
 
 	switch cmd {
 	case "img":
-		cmd_type = dtTunnelData
+		cmd_type = CmdTunnelData
 	case "new":
-		cmd_type = dtTunnelInfo
+		cmd_type = CmdTunnelInfo
 	default:
 		Log.Debugf("(%s)request decoder: can not recognize path cmd:%s", decoder.id, cmd)
 		return nil
@@ -117,9 +117,9 @@ func (decoder *ResponseDecoder) Decode(response *Response) *Packet {
 
 	switch cmd {
 	case "data":
-		cmd_type = dtTunnelData
+		cmd_type = CmdTunnelData
 	case "domain":
-		cmd_type = dtTunnelInfo
+		cmd_type = CmdTunnelInfo
 	default:
 		Log.Debugf("(%s)request decoder: can not recognize path cmd:%s", decoder.id, cmd)
 		return nil

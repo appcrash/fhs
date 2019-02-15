@@ -7,33 +7,6 @@ import (
 	// "strconv"
 )
 
-const (
-	dtTunnelInfo = iota
-	dtTunnelData
-)
-
-type Packet struct {
-	Cmd      int
-	TunnelId string
-	Data     []byte
-}
-
-type PacketChannel chan *Packet
-type TunnelErrorChannel chan *TunnelErrorInfo
-
-type TunnelErrorInfo struct {
-	TunnelId string
-	Error    error
-}
-
-type TunnelInfo struct {
-	TunnelId string
-	DataIn   PacketChannel
-	DataOut  PacketChannel
-	ErrorIn  TunnelErrorChannel
-	ErrorOut TunnelErrorChannel
-}
-
 type DefaultRouter struct {
 	socks_map                  map[string]*HttpSocket // socket id => out http sock
 	tunnel_map                 map[string]*TunnelInfo // tunnel id => out tunnel
@@ -43,12 +16,24 @@ type DefaultRouter struct {
 	channel_socket_error       chan *SocketErrorInfo
 	channel_new_tunnel         chan *TunnelInfo
 	channel_new_socket         chan *HttpSocket
+	handler                    RouterHandler
 }
 
 type Router interface {
 	NewSocket(*HttpSocket)
 	NewTunnel(*TunnelInfo)
+	GetTunnel(string) *TunnelInfo
+	GetSocket(string) *HttpSocket
+	ForwardTunnelPacket(*Packet)
+	ForwardSocketPacket(*Packet)
 	Loop()
+}
+
+type RouterHandler interface {
+	OnNewTunnel(Router, *TunnelInfo)
+	OnNewSocket(Router, *HttpSocket)
+	OnTunnelData(Router, *Packet)
+	OnSocketData(Router, *Packet)
 }
 
 // func newClientHttpSocket(socket_id string) (*HttpSocket, error) {
@@ -64,7 +49,7 @@ type Router interface {
 // 	}
 // }
 
-func NewRouter() Router {
+func NewRouter(h RouterHandler) Router {
 	smap := make(map[string]*HttpSocket)
 	tmap := make(map[string]*TunnelInfo)
 	csend, crecv := make(PacketChannel, 10), make(PacketChannel, 10)
@@ -75,6 +60,7 @@ func NewRouter() Router {
 		csend, crecv,
 		terror, serror,
 		nt, ns,
+		h,
 	}
 }
 
@@ -88,6 +74,8 @@ func (r *DefaultRouter) setupTunnel(t *TunnelInfo) {
 			}
 		}
 	}
+	r.tunnel_map[tid] = t
+	r.handler.OnNewTunnel(r, t)
 
 	go func() {
 		for p := range data_in { // library user send data packet to router, combine them to bus
@@ -101,14 +89,12 @@ func (r *DefaultRouter) setupTunnel(t *TunnelInfo) {
 	go func() {
 		for p := range error_in { // library user send tunnel error info to router, combine them to bus
 			if p == nil {
-				Log.Infof("router: tunnel(%s) error happened", p.TunnelId)
+				Log.Infof("router: tunnel(%s) error tunnel closed", p.TunnelId)
 				break
 			}
 			r.channel_tunnel_error <- p
 		}
 	}()
-
-	r.tunnel_map[tid] = t
 }
 
 func (r *DefaultRouter) setupSocket(s *HttpSocket) {
@@ -123,15 +109,39 @@ func (r *DefaultRouter) setupSocket(s *HttpSocket) {
 	}
 	Log.Debugf("router: add http socket with socket id:%s", sid)
 	r.socks_map[sid] = s
+	r.handler.OnNewSocket(r, s)
 }
 
 func (r *DefaultRouter) NewSocket(s *HttpSocket) {
 	r.channel_new_socket <- s
-
 }
 
 func (r *DefaultRouter) NewTunnel(info *TunnelInfo) {
 	r.channel_new_tunnel <- info
+}
+
+func (r *DefaultRouter) GetSocket(id string) *HttpSocket {
+	if s, ok := r.socks_map[id]; ok {
+		return s
+	} else {
+		return nil
+	}
+}
+
+func (r *DefaultRouter) GetTunnel(id string) *TunnelInfo {
+	if t, ok := r.tunnel_map[id]; ok {
+		return t
+	} else {
+		return nil
+	}
+}
+
+func (r *DefaultRouter) ForwardTunnelPacket(p *Packet) {
+	r.channel_tunnel2sock_packet <- p
+}
+
+func (r *DefaultRouter) ForwardSocketPacket(p *Packet) {
+	r.channel_sock2tunnel_packet <- p
 }
 
 func (r *DefaultRouter) onTunnelData(p *Packet) {
@@ -144,7 +154,7 @@ func (r *DefaultRouter) onTunnelData(p *Packet) {
 			break
 		}
 	}
-	sock.encoder.Encode(p)
+	sock.Send(p)
 }
 
 func (r *DefaultRouter) onTunnelError(e *TunnelErrorInfo) {
@@ -180,11 +190,13 @@ func (r *DefaultRouter) Loop() {
 	for {
 		select {
 		case p := <-r.channel_tunnel2sock_packet:
-			r.onTunnelData(p)
+			// r.onTunnelData(p)
+			r.handler.OnTunnelData(r, p)
 		case e := <-r.channel_tunnel_error:
 			r.onTunnelError(e)
 		case p := <-r.channel_sock2tunnel_packet:
-			r.onSocketData(p)
+			// r.onSocketData(p)
+			r.handler.OnSocketData(r, p)
 		case e := <-r.channel_socket_error:
 			r.onSocketError(e)
 		case i := <-r.channel_new_tunnel:

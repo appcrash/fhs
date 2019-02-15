@@ -62,9 +62,9 @@ func (encoder *RequestEncoder) encodeNewTunnel(tunnel_id string, domain string) 
 func (encoder *RequestEncoder) Encode(packet *Packet) (data []byte) {
 	tid := packet.TunnelId
 	switch packet.Cmd {
-	case dtTunnelInfo:
+	case CmdTunnelInfo:
 		data = encoder.encodeNewTunnel(tid, string(packet.Data))
-	case dtTunnelData:
+	case CmdTunnelData:
 		data = encoder.encodeData(tid, packet.Data)
 	}
 	return
@@ -148,9 +148,9 @@ func (encoder *ResponseEncoder) encodeNewTunnel(tunnel_id string, domain string)
 func (encoder *ResponseEncoder) Encode(packet *Packet) (data []byte) {
 	tid := packet.TunnelId
 	switch packet.Cmd {
-	case dtTunnelInfo:
+	case CmdTunnelInfo:
 		data = encoder.encodeNewTunnel(tid, string(packet.Data))
-	case dtTunnelData:
+	case CmdTunnelData:
 		data = encoder.encodeData(tid, packet.Data)
 	}
 	return
