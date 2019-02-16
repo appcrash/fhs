@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
-	// "github.com/appcrash/fhs/fhslib"
+	"github.com/appcrash/fhs/fhslib"
 	"io"
 	"net"
 	// "strconv"
@@ -35,6 +35,7 @@ const (
 
 type Socks5Server struct {
 	listenAddr string
+	router     fhslib.Router
 }
 
 func (s *Socks5Server) listen() {
@@ -50,11 +51,11 @@ func (s *Socks5Server) listen() {
 			logger.Errorf("accept new connection failed")
 			panic(err)
 		}
-		go handleConnection(conn)
+		go s.handleConnection(conn)
 	}
 }
 
-func readHeader(conn net.Conn) error {
+func (s *Socks5Server) readHeader(conn net.Conn) error {
 	var bufConn *bufio.Reader = bufio.NewReader(conn)
 	header := []byte{0, 0, 0}
 	if _, err := bufConn.Read(header); err != nil {
@@ -72,7 +73,7 @@ func readHeader(conn net.Conn) error {
 	return nil
 }
 
-func sendNoAuthReply(writer io.Writer) error {
+func (s *Socks5Server) sendNoAuthReply(writer io.Writer) error {
 	_, err := writer.Write([]byte{socks5Version, 0})
 	if err != nil {
 		logger.Errorln("send no auth reply error")
@@ -80,7 +81,7 @@ func sendNoAuthReply(writer io.Writer) error {
 	return err
 }
 
-func sendRequestReply(writer io.Writer, resp uint8, addr net.IP, port uint16) error {
+func (s *Socks5Server) SendRequestReply(writer io.Writer, resp uint8, addr net.IP, port uint16) error {
 	ip_len := 4 // currently only ipv4 supported
 	data := make([]byte, 6+ip_len)
 	data[0] = socks5Version
@@ -95,7 +96,7 @@ func sendRequestReply(writer io.Writer, resp uint8, addr net.IP, port uint16) er
 	return nil
 }
 
-func handleRequest(conn net.Conn) error {
+func (s *Socks5Server) handleRequest(conn net.Conn) error {
 	buf := []byte{0, 0, 0, 0}
 	if num, err := io.ReadAtLeast(conn, buf, 4); err != nil {
 		logger.Errorf("error when read request, only got %d bytes", num)
@@ -155,11 +156,11 @@ func handleRequest(conn net.Conn) error {
 		logger.Errorln("read request port error")
 		return err
 	}
-	// var port uint16 = binary.BigEndian.Uint16(portBuf)
+	var port uint16 = binary.BigEndian.Uint16(portBuf)
 
 	switch command {
 	case connectCommand:
-		// handleConnect(conn, domain, int(port))
+		s.handleConnect(conn, domain, int(port))
 	case bindCommand:
 		fallthrough
 	case associateCommand:
@@ -172,63 +173,68 @@ func handleRequest(conn net.Conn) error {
 	return nil
 }
 
-// func handleConnect(conn net.Conn, domain string, dest_port int) {
-// 	config := fhslib.GetConfig()
-// 	remote_addr := net.JoinHostPort(domain, strconv.Itoa(dest_port))
-// 	fhs_server_addr := net.JoinHostPort(config.Server.Ip, strconv.Itoa(config.Server.Port))
-// 	fhs_server_conn, conn_err := net.Dial("tcp", fhs_server_addr)
+func (s *Socks5Server) handleConnect(conn net.Conn, domain string, dest_port int) {
+	tunnel_id := fhslib.GenerateId()
+	tunnel := fhslib.NewTunnelInfo(tunnel_id)
+	tunnel.CustomData = &tunnelData{conn, domain, dest_port, s}
+	s.router.NewTunnel(tunnel)
 
-// 	if conn_err != nil {
-// 		logger.Error("connect to remote server error")
-// 		sendRequestReply(conn, hostUnreachable, []byte{0, 0, 0, 0}, 0)
-// 		return
-// 	}
+	// config := fhslib.GetConfig()
+	// remote_addr := net.JoinHostPort(domain, strconv.Itoa(dest_port))
+	// fhs_server_addr := net.JoinHostPort(config.Server.Ip, strconv.Itoa(config.Server.Port))
+	// fhs_server_conn, conn_err := net.Dial("tcp", fhs_server_addr)
 
-// 	track_id := fhslib.GenerateId()
-// 	encoder := fhslib.NewRequestEncoder(track_id, "key", conn)
-// 	decoder := fhslib.NewResponseDecoder(track_id, "key", fhs_server_conn)
-// 	encoder.WriteResolveRequest(fhs_server_conn, remote_addr)
-// 	decoder.Prepare()
-// 	resp := decoder.GetResponse()
+	// if conn_err != nil {
+	// 	logger.Error("connect to remote server error")
+	// 	s.SendRequestReply(conn, hostUnreachable, []byte{0, 0, 0, 0}, 0)
+	// 	return
+	// }
 
-// 	if resp == nil {
-// 		logger.Error("decoder expect dns response but get nothing")
-// 		return
-// 	}
-// 	addr := resp.Data.String()
-// 	logger.Debugf("dns response is %s", addr)
-// 	addr_array := strings.Split(addr, ":")
-// 	ip_str, port_str := addr_array[0], addr_array[1]
-// 	logger.Debugf("remote local bind ip:%s, port:%s", ip_str, port_str)
-// 	ip := net.ParseIP(ip_str)
-// 	port, _ := strconv.Atoi(port_str)
-// 	logger.Debugf("send socks reply with success ip: %s, port: %d", ip, port)
-// 	sendRequestReply(conn, successReply, ip, uint16(port))
+	// track_id := fhslib.GenerateId()
+	// encoder := fhslib.NewRequestEncoder(track_id, "key", conn)
+	// decoder := fhslib.NewResponseDecoder(track_id, "key", fhs_server_conn)
+	// encoder.WriteResolveRequest(fhs_server_conn, remote_addr)
+	// decoder.Prepare()
+	// resp := decoder.GetResponse()
 
-// 	// pipe bidirection
-// 	c := make(chan string, 2)
-// 	go encoder.PipeTo(fhs_server_conn, c)
-// 	go decoder.PipeTo(conn, c)
+	// if resp == nil {
+	// 	logger.Error("decoder expect dns response but get nothing")
+	// 	return
+	// }
+	// addr := resp.Data.String()
+	// logger.Debugf("dns response is %s", addr)
+	// addr_array := strings.Split(addr, ":")
+	// ip_str, port_str := addr_array[0], addr_array[1]
+	// logger.Debugf("remote local bind ip:%s, port:%s", ip_str, port_str)
+	// ip := net.ParseIP(ip_str)
+	// port, _ := strconv.Atoi(port_str)
+	// logger.Debugf("send socks reply with success ip: %s, port: %d", ip, port)
+	// sendRequestReply(conn, successReply, ip, uint16(port))
 
-// 	for i := 0; i < 2; i++ {
-// 		name := <-c
-// 		logger.Debugf("%s done", name)
-// 	}
-// }
+	// // pipe bidirection
+	// c := make(chan string, 2)
+	// go encoder.PipeTo(fhs_server_conn, c)
+	// go decoder.PipeTo(conn, c)
 
-func handleConnection(conn net.Conn) {
+	// for i := 0; i < 2; i++ {
+	// 	name := <-c
+	// 	logger.Debugf("%s done", name)
+	// }
+}
+
+func (s *Socks5Server) handleConnection(conn net.Conn) {
 	logger.Infof("new connection acceptted from %s", conn.RemoteAddr())
 	defer conn.Close()
 
-	if err := readHeader(conn); err != nil {
+	if err := s.readHeader(conn); err != nil {
 		return
 	}
 
-	if err := sendNoAuthReply(conn); err != nil {
+	if err := s.sendNoAuthReply(conn); err != nil {
 		return
 	}
 
-	if err := handleRequest(conn); err != nil {
+	if err := s.handleRequest(conn); err != nil {
 		return
 	}
 }

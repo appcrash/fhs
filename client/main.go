@@ -17,6 +17,11 @@ func init() {
 func main() {
 	config := fhslib.GetConfig()
 	addr := fmt.Sprintf("%s:%d", config.Client.Ip, config.Client.Port)
-	s := Socks5Server{addr}
+
+	router := fhslib.NewRouter(&routerHandler{})
+	go func() {
+		router.Loop()
+	}()
+	s := Socks5Server{addr, router}
 	s.listen()
 }

@@ -27,8 +27,8 @@ type Encoder interface {
 
 const max_segment = 1024 * 32 // max request data
 
-func NewRequestEncoder(id string, key string) RequestEncoder {
-	return RequestEncoder{id, key}
+func NewRequestEncoder(id string, key string) *RequestEncoder {
+	return &RequestEncoder{id, key}
 }
 
 func (encoder *RequestEncoder) encodeData(tunnel_id string, data []byte) []byte {
@@ -108,9 +108,9 @@ func (encoder *RequestEncoder) Encode(packet *Packet) (data []byte) {
 // }
 
 //-----------------------response encoder--------------------------------
-func NewResponseEncoder(id string, key string) ResponseEncoder {
+func NewResponseEncoder(id string, key string) *ResponseEncoder {
 
-	return ResponseEncoder{id, key}
+	return &ResponseEncoder{id, key}
 }
 
 func (encoder *ResponseEncoder) encodeData(tunnel_id string, data []byte) []byte {

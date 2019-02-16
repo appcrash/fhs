@@ -16,7 +16,7 @@ func init() {
 
 func main() {
 	config := fhslib.GetConfig()
-	router := fhslib.NewRouter()
+	router := fhslib.NewRouter(routerHandler{})
 	handler := Server{router}
 
 	go func() {

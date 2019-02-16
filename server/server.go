@@ -19,7 +19,7 @@ func (h *routerHandler) OnNewTunnel(r fhslib.Router, ti *fhslib.TunnelInfo) {
 
 func (h *routerHandler) OnNewSocket(r Router, s *HttpSocket) {
 	conn := s.GetConnection()
-	c := make(*fhslib.Request)
+	c := make(chan *fhslib.Request)
 	go fhslib.GetRequests(conn, c)
 	go func() {
 		for req := range c {
@@ -87,7 +87,7 @@ func connectToRemote(r fhslib.Router, tunnel_id string, domain string) {
 			if err != nil {
 				tmp := make([]byte, payload_len)
 				copy(tmp, rbuf[:payload_len])
-				p := &Packet(fhslib.CmdTunnelData, tunnel_id, tmp)
+				p := &Packet{fhslib.CmdTunnelData, tunnel_id, tmp}
 				r.ForwardTunnelPacket(p)
 			} else {
 				logger.Errorf("remote connection of tunnel(%s) error", tunnel_id)

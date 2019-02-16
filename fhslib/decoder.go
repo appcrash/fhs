@@ -27,11 +27,15 @@ type Decoder interface {
 }
 
 // -------------------------- Request Decoder ------------------------------------------
-func NewRequestDecoder(id string, key string) RequestDecoder {
-	return RequestDecoder{id, key}
+func NewRequestDecoder(id string, key string) *RequestDecoder {
+	return &RequestDecoder{id, key}
 }
 
-func (decoder *RequestDecoder) Decode(request *Request) *Packet {
+func (decoder *RequestDecoder) Decode(req interface{}) *Packet {
+	request, ok := req.(*Request)
+	if !ok {
+		return nil
+	}
 	path_regex, _ := regexp.Compile(`/([^/]+)/(.+)`)
 
 	var cmd_type int
@@ -94,11 +98,15 @@ func (decoder *RequestDecoder) Decode(request *Request) *Packet {
 // }
 
 // -------------------------- Response Decoder ------------------------------------------
-func NewResponseDecoder(id string, key string) ResponseDecoder {
-	return ResponseDecoder{id, key}
+func NewResponseDecoder(id string, key string) *ResponseDecoder {
+	return &ResponseDecoder{id, key}
 }
 
-func (decoder *ResponseDecoder) Decode(response *Response) *Packet {
+func (decoder *ResponseDecoder) Decode(resp interface{}) *Packet {
+	response, ok := resp.(*Response)
+	if !ok {
+		return nil
+	}
 	var cmd_type int
 	var tunnel_id, cmd string
 	cookie_regex, _ := regexp.Compile(`([^=]+)=(.+)`)

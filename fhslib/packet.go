@@ -36,11 +36,12 @@ type TunnelErrorInfo struct {
 }
 
 type TunnelInfo struct {
-	TunnelId string
-	DataIn   PacketChannel
-	DataOut  PacketChannel
-	ErrorIn  TunnelErrorChannel
-	ErrorOut TunnelErrorChannel
+	TunnelId   string
+	DataIn     PacketChannel
+	DataOut    PacketChannel
+	ErrorIn    TunnelErrorChannel
+	ErrorOut   TunnelErrorChannel
+	CustomData interface{} // tunnel custom data
 }
 
 func NewHttpSocket(sid string, encoder Encoder, decoder Decoder, conn net.Conn) *HttpSocket {
@@ -75,5 +76,6 @@ func NewTunnelInfo(tid string) *TunnelInfo {
 		tid,
 		make(PacketChannel), make(PacketChannel),
 		make(TunnelErrorChannel), make(TunnelErrorChannel),
+		nil,
 	}
 }
